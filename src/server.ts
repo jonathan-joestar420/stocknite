@@ -5,7 +5,7 @@ import { databaseHealth, pool } from "./db.js";
 import { handleLineEvents } from "./line/handler.js";
 import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
-import { getMarketSentiment, getStockHistory, getStockSummary } from "./services/market.js";
+import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
 import { listHoldings, removeHolding, upsertHolding } from "./services/portfolio.js";
 import { landingPage } from "./web.js";
 
@@ -40,6 +40,15 @@ app.get<{ Params: { code: string } }>("/api/stocks/:code", async (request, reply
   const data = await getStockSummary(request.params.code);
   return data ?? reply.code(404).send({ error: "stock_not_found" });
 });
+app.get<{ Params: { code: string }; Querystring: { date?: string } }>(
+  "/api/stocks/:code/day", async (request, reply) => {
+    const date = request.query.date ?? "";
+    if (!/^\d{4}-?\d{2}-?\d{2}$/.test(date)) {
+      return reply.code(400).send({ error: "invalid_date", expected: "YYYY-MM-DD" });
+    }
+    const data = await getStockDailySnapshot(request.params.code, date);
+    return data ?? reply.code(404).send({ error: "stock_or_date_not_found" });
+  });
 app.get<{ Params: { code: string }; Querystring: { limit?: string } }>(
   "/api/stocks/:code/history", async (request) => {
     const limit = Math.min(365, Math.max(1, Number(request.query.limit ?? 90)));
