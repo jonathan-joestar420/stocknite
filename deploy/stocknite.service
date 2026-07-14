@@ -1,0 +1,22 @@
+[Unit]
+Description=StockNite web and LINE bot service
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stocknite
+Group=stocknite
+WorkingDirectory=/opt/stocknite/current
+EnvironmentFile=/etc/stocknite/stocknite.env
+ExecStart=/usr/bin/node /opt/stocknite/current/dist/server.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/stocknite
+
+[Install]
+WantedBy=multi-user.target
