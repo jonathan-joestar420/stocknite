@@ -59,6 +59,7 @@ app.get<{ Querystring: { code?: string; state?: string } }>(
     }
     try {
       const profile = await exchangeCodeForUserId(code);
+      request.log.info("line_login_ok");
       reply.header("set-cookie", [
         "sn_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
         `sn_session=${signSession(profile.userId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`,
