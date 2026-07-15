@@ -151,9 +151,9 @@ export function createConversationService(dependencies: ConversationDependencies
           const response = await invokeWithRefund(userId, authorization, {
             userId,
             message: [
-              "請根據 current_holdings 分析這位使用者目前的持股需求。",
+              "請根據下方由 backend 驗證的 evidence.holdings 分析這位使用者目前的持股。",
               "先列出目前持股，再說明資料是否完整、集中度，以及下一步值得查看的項目。",
-              "不要新增、修改或刪除任何持股。",
+              "這些持股已屬於本次使用者；不得聲稱缺少身份或持股資料，也不要新增、修改或刪除任何持股。",
             ].join("\n"),
             evidence: { holdings },
           });

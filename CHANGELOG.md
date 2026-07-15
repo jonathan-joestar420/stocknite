@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 修正 AgentCore Runtime 忽略額外 `current_holdings` 欄位，導致已保存持股卻回覆「沒有使用者身份」的問題；backend 現在會把 allowlisted verified evidence 同步嵌入 prompt。
+- AgentCore 若在非空 verified holdings 下仍明確拒絕查詢，會安全 fallback 至 direct Bedrock；圖片請求不使用文字 fallback。
+- `/api/agent/analyze` 改為要求 `x-agent-key`，並由後端依 `lineUserId` 載入持股，不接受客戶端自帶 trusted evidence。
+- Evidence 限定白名單欄位、100 筆與每個字串 200 字，保持完整合法 JSON。
+- 自動化測試增至 `34/34`。
+
 ### 尚未完成
 
 - 正式付款與儲值驗證。

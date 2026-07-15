@@ -8,7 +8,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 
 ## 目前 Hackathon 功能狀態
 
-目前 `main` 已完成並通過 TypeScript typecheck、29 個自動化測試與 production build：
+目前 `main` 已完成並通過 TypeScript typecheck、34 個自動化測試與 production build：
 
 - 公開品牌首頁與 LINE Login。
 - 登入後 `/me` 持股頁：市值、權重、成本、買進日期與未實現損益。
@@ -86,7 +86,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 - `GET /api/agent/holdings?lineUserId=...`
 - `POST /api/agent/holdings`：新增持股
 - `PUT /api/agent/holdings`：更新持股／全數賣出
-- `POST /api/agent/analyze`
+- `POST /api/agent/analyze`：需 `x-agent-key`；body 提供 `lineUserId` 與 `message`，後端自行載入 verified holdings
 
 完整契約請見 `docs/HOLDINGS_API.md`、`docs/AGENT_INTEGRATION.md` 與 `docs/INTEGRATION_OVERVIEW.md`。
 
@@ -118,7 +118,7 @@ AgentCore Runtime payload：
 
 ```json
 {
-  "prompt": "使用者問題",
+  "prompt": "使用者問題 + backend-verified evidence JSON",
   "line_user_id": "LINE user ID",
   "current_holdings": [],
   "market_snapshot": {},

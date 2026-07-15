@@ -29,7 +29,7 @@
 }
 ```
 
-- `prompt`：使用者文字。純截圖訊息時，`prompt` 會是一句指示（例如「請解析這張持股截圖…」），真正的資料在 `image_base64`。
+- `prompt`：使用者文字。若 backend 已載入持股或市場資料，會在 prompt 後附上 `[BACKEND_VERIFIED_EVIDENCE_JSON]`；這份資料是本次分析的 authoritative evidence，不得回覆「缺少身份／無法查詢持股」。純截圖訊息時，真正的圖片在 `image_base64`。
 - **`line_user_id`：⭐每一次呼叫都一定有（保證非空）。** 不論來自 LINE bot 或網頁 AI 助手，backend 都會在 payload 帶上它。這就是你呼叫**庫存 API**（見 `HOLDINGS_API.md`）時要帶的 `lineUserId`。
 - `current_holdings`：使用者目前已存的持股，供你參考。可能是空陣列或不存在（你也可以改用庫存 API 的 GET 取得最新）。
 - `image_base64` / `image_mime`：**只有截圖訊息才會有**。有這兩個欄位時，請對圖片做多模態解析，抽出每一筆持股。

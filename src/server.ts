@@ -208,12 +208,18 @@ app.put<{ Body: {
   return { ok: true, updated: true, holdings: result.holdings };
 });
 
-app.post<{ Body: { message?: string; evidence?: unknown } }>(
+app.post<{ Body: { message?: string; lineUserId?: string } }>(
   "/api/agent/analyze", async (request, reply) => {
-    const id = userId(request);
-    if (!id) return reply.code(401).send({ error: "missing_line_user" });
-    if (!request.body.message) return reply.code(400).send({ error: "missing_message" });
-    return invokeAgentCore({ userId: id, ...request.body, message: request.body.message });
+    if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
+    const { message, lineUserId } = request.body;
+    if (!message) return reply.code(400).send({ error: "missing_message" });
+    if (!lineUserId) return reply.code(400).send({ error: "missing_lineUserId" });
+    const holdings = await listHoldings(lineUserId);
+    return invokeAgentCore({
+      userId: lineUserId,
+      message,
+      evidence: { holdings },
+    });
   });
 
 app.post("/api/line/webhook", async (request, reply) => {
