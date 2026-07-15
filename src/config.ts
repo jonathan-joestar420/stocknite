@@ -15,4 +15,9 @@ export const config = {
     optional("PUBLIC_BASE_URL") ?? "https://stocknite.example.com",
   agentCoreEndpoint: optional("AGENTCORE_ENDPOINT"),
   agentCoreAuthToken: optional("AGENTCORE_AUTH_TOKEN"),
+  agentCoreArn: optional("AGENTCORE_ARN"),
+  agentCoreQualifier: optional("AGENTCORE_QUALIFIER") ?? "DEFAULT",
+  awsRegion: optional("AWS_REGION") ?? optional("AWS_DEFAULT_REGION") ?? "us-west-2",
+  bedrockModelId:
+    optional("BEDROCK_MODEL_ID") ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0",
 };
