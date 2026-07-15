@@ -1,12 +1,12 @@
 import Fastify, { type FastifyRequest } from "fastify";
-import { invokeAgentCore } from "./agent/adapter.js";
+import { invokeAgentCore, invokeBedrock } from "./agent/adapter.js";
 import { config } from "./config.js";
 import { databaseHealth, pool } from "./db.js";
 import { handleLineEvents } from "./line/handler.js";
 import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
-import { listHoldings, removeHolding, upsertHolding } from "./services/portfolio.js";
+import { createHolding, listHoldings, removeHolding, updateHolding, upsertHolding } from "./services/portfolio.js";
 import {
   authorizeUrl, exchangeCodeForUserId, newState, readCookie, signSession, verifySession,
 } from "./line/login.js";
@@ -76,11 +76,44 @@ app.get("/auth/logout", async (_, reply) => {
   return reply.redirect("/");
 });
 
+function sessionUser(request: FastifyRequest): string | undefined {
+  return verifySession(readCookie(request.headers.cookie, "sn_session"));
+}
+
 app.get("/me", async (request, reply) => {
-  const userId = verifySession(readCookie(request.headers.cookie, "sn_session"));
+  const userId = sessionUser(request);
   if (!userId) return reply.redirect("/auth/line/login");
   const holdings = await listHoldings(userId) as Parameters<typeof portfolioPage>[0];
   return reply.type("text/html").send(portfolioPage(holdings));
+});
+
+// 單次 AI 分析（Bedrock）：限登入者，分析本人整體持股。
+app.post("/api/analyze", async (request, reply) => {
+  const userId = sessionUser(request);
+  if (!userId) return reply.code(401).send({ error: "login_required" });
+  const holdings = await listHoldings(userId) as Array<{ stock_code: string }>;
+  if (!holdings.length) return { answer: "你目前沒有持股，先用 LINE 匯入後再來分析吧。" };
+  const details: unknown[] = [];
+  for (const h of holdings) {
+    const s = await getStockSummary(h.stock_code);
+    if (s) details.push(s);
+  }
+  const res = await invokeBedrock({
+    userId,
+    message: "請針對「我的整體持股組合」做一次體檢，涵蓋：投資風格、資產配置、集中風險、投資習慣、常見錯誤、決策焦慮。用重點條列、精簡白話。",
+    evidence: { holdings, details },
+  });
+  return { answer: res.answer };
+});
+
+// AI 助手（AgentCore）：限登入者，用本人 lineUserId（效果同 LINE bot）。
+app.post<{ Body: { message?: string } }>("/api/assistant", async (request, reply) => {
+  const userId = sessionUser(request);
+  if (!userId) return reply.code(401).send({ error: "login_required" });
+  const message = request.body?.message?.trim();
+  if (!message) return reply.code(400).send({ error: "missing_message" });
+  const res = await invokeAgentCore({ userId, message });
+  return { answer: res.answer };
 });
 
 app.get<{ Params: { code: string } }>("/api/stocks/:code", async (request, reply) => {
@@ -139,31 +172,44 @@ app.get<{ Querystring: { lineUserId?: string } }>(
     return listHoldings(lineUserId);
   });
 
+// 新增（Create）：只新增，不覆蓋既有；標的已存在回 409。
 app.post<{ Body: {
   lineUserId?: string; stockCode?: string; quantity?: number;
   averageCost?: number; purchaseDate?: string;
 } }>("/api/agent/holdings", async (request, reply) => {
   if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
   const { lineUserId, stockCode, quantity, averageCost, purchaseDate } = request.body;
-  if (!lineUserId || !stockCode || !quantity || quantity <= 0) {
-    return reply.code(400).send({ error: "invalid_holding", need: ["lineUserId", "stockCode", "quantity>0"] });
+  if (!lineUserId || !stockCode || quantity === undefined || quantity < 0) {
+    return reply.code(400).send({ error: "invalid_holding", need: ["lineUserId", "stockCode", "quantity>=0"] });
   }
   const summary = await getStockSummary(stockCode);
   if (!summary) return reply.code(400).send({ error: "unsupported_stock", stockCode });
-  const holdings = await upsertHolding(lineUserId, stockCode, quantity, averageCost, purchaseDate);
-  return { ok: true, holdings };
+  const result = await createHolding(lineUserId, stockCode, quantity, averageCost, purchaseDate);
+  if (!result.created) {
+    return reply.code(409).send({ error: "already_exists", stockCode, hint: "use PUT /api/agent/holdings to update" });
+  }
+  return { ok: true, created: true, holdings: result.holdings };
 });
 
-app.delete<{ Body: { lineUserId?: string; stockCode?: string } }>(
-  "/api/agent/holdings", async (request, reply) => {
-    if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
-    const { lineUserId, stockCode } = request.body ?? {};
-    if (!lineUserId || !stockCode) {
-      return reply.code(400).send({ error: "invalid_request", need: ["lineUserId", "stockCode"] });
-    }
-    const holdings = await removeHolding(lineUserId, stockCode);
-    return { ok: true, holdings };
-  });
+// 更新（Update）：更新既有標的欄位；全數賣出時傳 quantity=0 + soldPrice。標的不存在回 404。
+app.put<{ Body: {
+  lineUserId?: string; stockCode?: string; quantity?: number;
+  averageCost?: number; purchaseDate?: string; soldPrice?: number;
+} }>("/api/agent/holdings", async (request, reply) => {
+  if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
+  const { lineUserId, stockCode, quantity, averageCost, purchaseDate, soldPrice } = request.body;
+  if (!lineUserId || !stockCode) {
+    return reply.code(400).send({ error: "invalid_request", need: ["lineUserId", "stockCode"] });
+  }
+  if (quantity !== undefined && quantity < 0) {
+    return reply.code(400).send({ error: "invalid_quantity", need: ["quantity>=0"] });
+  }
+  const result = await updateHolding(lineUserId, stockCode, { quantity, averageCost, purchaseDate, soldPrice });
+  if (!result.updated) {
+    return reply.code(404).send({ error: "holding_not_found", stockCode, hint: "use POST /api/agent/holdings to create" });
+  }
+  return { ok: true, updated: true, holdings: result.holdings };
+});
 
 app.post<{ Body: { message?: string; evidence?: unknown } }>(
   "/api/agent/analyze", async (request, reply) => {

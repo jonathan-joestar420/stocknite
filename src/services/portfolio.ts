@@ -11,7 +11,7 @@ async function ensureUser(lineUserId: string) {
 
 export async function listHoldings(lineUserId: string) {
   return query(`
-    SELECT h.stock_code, s.stock_name, h.quantity, h.average_cost, h.purchase_date,
+    SELECT h.stock_code, s.stock_name, h.quantity, h.average_cost, h.purchase_date, h.sold_price,
       NULLIF(s.close_price, '')::numeric AS close_price,
       h.quantity * NULLIF(s.close_price, '')::numeric AS market_value,
       CASE WHEN SUM(h.quantity * NULLIF(s.close_price, '')::numeric) OVER () > 0
@@ -36,6 +36,42 @@ export async function upsertHolding(
       purchase_date = EXCLUDED.purchase_date, updated_at = now()`,
   [userId, stockCode, quantity, averageCost ?? null, purchaseDate ?? null]);
   return listHoldings(lineUserId);
+}
+
+/** 新增庫存：只在該標的尚未存在時插入。已存在則不覆蓋（回傳 created=false）。 */
+export async function createHolding(
+  lineUserId: string, stockCode: string, quantity: number,
+  averageCost?: number, purchaseDate?: string,
+) {
+  const userId = await ensureUser(lineUserId);
+  const rows = await query<{ stock_code: string }>(`
+    INSERT INTO app_data.portfolio_holdings
+      (user_id, stock_code, quantity, average_cost, purchase_date)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (user_id, stock_code) DO NOTHING
+    RETURNING stock_code`,
+  [userId, stockCode, quantity, averageCost ?? null, purchaseDate ?? null]);
+  return { created: rows.length > 0, holdings: await listHoldings(lineUserId) };
+}
+
+/** 更新既有庫存的指定欄位（未提供的欄位維持不變）。全數賣出時可傳 quantity=0 + soldPrice。 */
+export async function updateHolding(
+  lineUserId: string, stockCode: string,
+  fields: { quantity?: number; averageCost?: number; purchaseDate?: string; soldPrice?: number },
+) {
+  const rows = await query<{ stock_code: string }>(`
+    UPDATE app_data.portfolio_holdings h
+    SET quantity = COALESCE($3, h.quantity),
+        average_cost = COALESCE($4, h.average_cost),
+        purchase_date = COALESCE($5, h.purchase_date),
+        sold_price = COALESCE($6, h.sold_price),
+        updated_at = now()
+    FROM app_data.users u
+    WHERE h.user_id = u.id AND u.line_user_id = $1 AND h.stock_code = $2
+    RETURNING h.stock_code`,
+  [lineUserId, stockCode, fields.quantity ?? null, fields.averageCost ?? null,
+    fields.purchaseDate ?? null, fields.soldPrice ?? null]);
+  return { updated: rows.length > 0, holdings: await listHoldings(lineUserId) };
 }
 
 export async function removeHolding(lineUserId: string, stockCode: string) {
