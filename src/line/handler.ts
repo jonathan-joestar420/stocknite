@@ -65,6 +65,26 @@ function asText(value: unknown): string {
   return JSON.stringify(value, null, 2).slice(0, 4500);
 }
 
+function num(v: unknown, digits = 0): string {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: digits }) : "—";
+}
+
+/** 把持股列表格式化成易讀文字（LINE 顯示用）。 */
+function formatHoldings(rows: Array<Record<string, unknown>>): string {
+  if (!rows.length) {
+    return "你目前沒有持股。\n可以傳一張持股截圖，或輸入「今天買了台積電50股 成本2400 買進日2025-12-30」來匯入。";
+  }
+  const total = rows.reduce((s, h) => s + (Number(h.market_value) || 0), 0);
+  const lines = rows.map((h) => {
+    const weight = h.weight != null ? `${(Number(h.weight) * 100).toFixed(1)}%` : "—";
+    const date = h.purchase_date ? String(h.purchase_date).slice(0, 10) : "無日期";
+    return `• ${h.stock_name ?? ""} ${h.stock_code}｜${num(h.quantity)} 股｜成本 ${num(h.average_cost, 2)}` +
+      `｜現價 ${num(h.close_price, 2)}｜市值 ${num(h.market_value)}（${weight}）｜買進 ${date}`;
+  });
+  return `你的持股（總市值 ${num(total)} 元）：\n${lines.join("\n")}`;
+}
+
 async function resolveAction(event: LineEvent): Promise<string> {
   const userId = event.source?.userId;
   if (!userId) return "目前只支援一對一聊天。";
@@ -93,17 +113,16 @@ async function resolveAction(event: LineEvent): Promise<string> {
     return `最新市場情緒資料：\n${asText(data)}\n情緒代表討論傾向，不是漲跌預測。`;
   }
   if (action === "portfolio_view" || text === "我的持股") {
-    const data = await listHoldings(userId);
-    return data.length ? `你的持股：\n${asText(data)}` :
-      "尚無持股。輸入「新增持股 2330 1000」即可建立。";
+    const data = await listHoldings(userId) as Array<Record<string, unknown>>;
+    return formatHoldings(data);
   }
   if (action === "settings" || text === "設定") {
     return "設定功能：晨報時間 07:00（開發中）\n可輸入「我的持股」查看資料。";
   }
   const holding = text.match(/^新增持股\s+([0-9A-Za-z]{2,10})\s+([0-9.]+)$/);
   if (holding) {
-    const data = await upsertHolding(userId, holding[1]!, Number(holding[2]));
-    return `已儲存，請確認：\n${asText(data)}`;
+    const data = await upsertHolding(userId, holding[1]!, Number(holding[2])) as Array<Record<string, unknown>>;
+    return `已儲存 ✅\n${formatHoldings(data)}`;
   }
   const stockCode = text.match(/^\d{4,6}$/)?.[0];
   if (stockCode) {
