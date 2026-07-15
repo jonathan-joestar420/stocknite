@@ -53,6 +53,8 @@ cp -a "$SOURCE_DIR/." "$RELEASE_DIR/"
 cd "$RELEASE_DIR"
 npm ci --omit=dev --ignore-scripts
 chown -R stocknite:stocknite "$RELEASE_DIR"
+chmod 755 "$RELEASE_DIR" "$RELEASE_DIR/sql"
+chmod 644 "$RELEASE_DIR"/sql/*.sql
 
 log "rendering protected environment file"
 TEMP_ENV="$(mktemp)"

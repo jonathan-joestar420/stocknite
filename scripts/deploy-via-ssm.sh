@@ -136,10 +136,12 @@ npm run build
 
 log "packaging exact commit $SHORT_COMMIT"
 mkdir -p "$STAGE_DIR"
+chmod 755 "$STAGE_DIR"
 cp package.json package-lock.json "$STAGE_DIR/"
 cp -R dist deploy scripts sql "$STAGE_DIR/"
 printf '%s\n' "$COMMIT" > "$STAGE_DIR/DEPLOY_COMMIT"
-tar -C "$STAGE_DIR" -czf "$PACKAGE" .
+tar -C "$STAGE_DIR" -czf "$PACKAGE" \
+  package.json package-lock.json DEPLOY_COMMIT dist deploy scripts sql
 ARTIFACT_SHA256="$(shasum -a 256 "$PACKAGE" | awk '{print $1}')"
 
 log "uploading temporary artifact to s3://$DEPLOY_BUCKET"
@@ -180,7 +182,12 @@ finish() {
     systemctl daemon-reload
     rollback_ok=true
     systemctl restart stocknite.service || rollback_ok=false
-    curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null || rollback_ok=false
+    rollback_healthy=false
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then rollback_healthy=true; break; fi
+      sleep 2
+    done
+    if [ "$rollback_healthy" != true ]; then rollback_ok=false; fi
     if [ "$rollback_ok" != true ]; then echo "critical: rollback health check failed" >&2; fi
     if [ "${failed_release#/opt/stocknite/releases/}" != "$failed_release" ] && [ "$failed_release" != "$PREVIOUS_RELEASE" ]; then
       rm -rf "$failed_release"
