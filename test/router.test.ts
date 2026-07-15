@@ -6,30 +6,39 @@ test("unknown messages return a warm local choice without pretending to understa
   const result = routeIntent("123");
   assert.equal(result.mode, "local");
   assert.equal(result.intent, "analysis_choice");
-  assert.match(result.reply ?? "", /還沒接住/);
+  assert.match(result.reply ?? "", /還沒看懂/);
   assert.match(result.reply ?? "", /功能說明/);
-  assert.match(result.reply ?? "", /分析持股/);
-  assert.match(result.reply ?? "", /分析近況/);
   assert.doesNotMatch(result.reply ?? "", /我目前只會/);
 });
 
-test("common stock-saving typo gets a specific friendly prompt", () => {
-  const result = routeIntent("存骨");
-  assert.equal(result.mode, "local");
-  assert.equal(result.intent, "holding_create_help");
-  assert.match(result.reply ?? "", /想說「存股」/);
-  assert.match(result.reply ?? "", /新增持股/);
-  assert.match(result.reply ?? "", /我的持股/);
+test("ambiguous stock-saving typos remain bounded before semantic classification", () => {
+  for (const message of ["存孤", "存古", "存骨"]) {
+    const result = routeIntent(message);
+    assert.equal(result.mode, "local", message);
+    assert.equal(result.intent, "analysis_choice", message);
+  }
 });
 
-test("help groups real commands into natural choices", () => {
-  const result = routeIntent("功能說明");
-  assert.equal(result.mode, "local");
-  assert.equal(result.intent, "help");
-  assert.match(result.reply ?? "", /想做什麼/);
-  assert.match(result.reply ?? "", /看資料/);
-  assert.match(result.reply ?? "", /記錄與點數/);
-  assert.match(result.reply ?? "", /AI 整理/);
+test("correct stock-saving phrases do not ask whether the user meant stock saving", () => {
+  for (const message of ["存股", "我要存股"]) {
+    const result = routeIntent(message);
+    assert.equal(result.mode, "local", message);
+    assert.equal(result.intent, "holding_create_help", message);
+    assert.doesNotMatch(result.reply ?? "", /你是想說/, message);
+    assert.match(result.reply ?? "", /新增持股/, message);
+    assert.match(result.reply ?? "", /我的持股/, message);
+    assert.match(result.reply ?? "", /分析持股/, message);
+  }
+});
+
+test("explicit help stays local while natural variants remain bounded", () => {
+  const help = routeIntent("功能說明");
+  assert.equal(help.intent, "help");
+  assert.match(help.reply ?? "", /想做什麼/);
+  assert.match(help.reply ?? "", /AI 整理/);
+
+  assert.equal(routeIntent("你能做什麼？").intent, "analysis_choice");
+  assert.equal(routeIntent("你可以幫我做什麼").intent, "analysis_choice");
 });
 
 test("only explicit analysis choices reach AgentCore", () => {

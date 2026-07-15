@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { routeIntent } from "../intents/router.js";
 import { conversationService } from "../services/conversation.js";
 import { creditService } from "../services/credits.js";
 
@@ -17,13 +16,13 @@ export function registerFeatureRoutes(
   app: FastifyInstance,
   sessionUser: (request: FastifyRequest) => string | undefined,
 ): void {
-  // 只解析意圖，不會呼叫 AgentCore；方便網站預覽下一步。
+  // 只解析意圖；可呼叫 bounded classifier，但不會呼叫 AgentCore 分析。
   app.post<{ Body: { message?: string } }>("/api/intents/resolve", async (request, reply) => {
     const userId = requireUser(request, reply, sessionUser);
     if (!userId) return reply;
     const message = request.body?.message?.trim();
     if (!message) return reply.code(400).send({ error: "missing_message" });
-    return routeIntent(message);
+    return conversationService.inspect(message);
   });
 
   app.post<{ Body: { message?: string } }>("/api/assistant", async (request, reply) => {

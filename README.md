@@ -6,12 +6,12 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 
 ## 目前 Hackathon 功能狀態
 
-目前 `main` 已完成並通過 TypeScript typecheck、16 個自動化測試與 production build：
+目前 `main` 已完成並通過 TypeScript typecheck、29 個自動化測試與 production build：
 
 - 公開品牌首頁與 LINE Login。
 - 登入後 `/me` 持股頁：市值、權重、成本、買進日期與未實現損益。
 - 持股儀表板：90 日價格、成本線、60 日社群情緒與估值位置。
-- 固定意圖路由：查持股、查股票、今日市場、新增持股、簽到與儲值都由後端處理；未知文字不會直接呼叫 AgentCore。
+- Hybrid 語意路由：明確指令由 deterministic router 處理；其他自然文字由 Claude Haiku 4.5 分類成白名單 intent，再交給後端或 AgentCore。
 - 使用者明確輸入「分析持股」或「分析近況」時，conversation service 才會組合持股／市場 evidence 並呼叫 AgentCore。
 - LINE 文字／圖片輸入；圖片可交由 AgentCore 解析結構化持股。
 - Credit ledger：每日簽到、10／30／100 點 demo 儲值、AI 分析扣點與失敗退款；預設仍為無限使用模式。
@@ -36,7 +36,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 
 ## 對話與 credit 行為
 
-`src/intents/router.ts` 先把訊息分成 local 或 AgentCore intent。只有明確的「分析持股」與「分析近況」會進入 AgentCore；其他已知指令由 `src/services/conversation.ts` 在後端完成，未知文字則回傳固定選項。
+`src/intents/router.ts` 先處理股票代號、完整新增持股、儲值與其他明確指令。只有 deterministic router 無法理解的自然文字才交給 `src/intents/semantic-router.ts`，由 Claude Haiku 4.5 透過 JSON Schema structured output 分類成白名單 intent。分類器不接收持股或身分資料，也不能直接產生新增持股、儲值等寫入操作；低信心、timeout、schema 或 IAM 失敗都會回到 deterministic fallback。只有分類為持股或近況分析時才會進入 AgentCore。
 
 可用的 LINE／assistant 指令包含：
 
@@ -97,6 +97,9 @@ npm run typecheck
 npm test
 npm run build
 npm start
+
+# 需要 AWS 臨時憑證；以真實 Haiku 驗證語意分類資料集
+npm run test:semantic-live
 ```
 
 依序執行 `sql/001_app_data.sql` 與 `sql/002_credit_ledger.sql`，建立使用者、持股與 credit ledger schema。`credit_ledger` 對應用程式角色只開放 `SELECT`／`INSERT`，維持 append-only。請勿把 `.env`、資料庫密碼或 LINE token 提交到 Git。
@@ -134,12 +137,19 @@ AGENTCORE_AUTH_TOKEN=
 AGENT_API_KEY=
 CREDIT_ENFORCEMENT_ENABLED=false
 BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
+SEMANTIC_ROUTER_ENABLED=true
+SEMANTIC_ROUTER_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0
+SEMANTIC_ROUTER_TIMEOUT_MS=4500
+SEMANTIC_ROUTER_MIN_CONFIDENCE=0.82
+SEMANTIC_ROUTER_MAX_CONCURRENCY=4
+SEMANTIC_ROUTER_FAILURE_THRESHOLD=3
+SEMANTIC_ROUTER_CIRCUIT_BREAKER_MS=30000
 AWS_REGION=us-west-2
 LINE_LOGIN_CHANNEL_ID=
 LINE_LOGIN_CHANNEL_SECRET=
 ```
 
-EC2 instance role 需要對應的 `bedrock-agentcore:InvokeAgentRuntime` 或 `bedrock:InvokeModel` 權限。
+啟用 semantic router 時，EC2 instance role 需要 `bedrock:InvokeModel`；使用 AgentCore 分析時另需 `bedrock-agentcore:InvokeAgentRuntime`。可用 `SEMANTIC_ROUTER_ENABLED=false` 立即關閉分類器並退回 deterministic router。
 
 ## EC2 部署
 

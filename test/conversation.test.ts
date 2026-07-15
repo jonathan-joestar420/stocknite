@@ -126,3 +126,24 @@ test("check-in stays local", async () => {
   assert.equal(calls.checkIn, 1);
   assert.equal(calls.agent, 0);
 });
+
+
+test("semantic check-in help never writes the credit ledger", async () => {
+  const { service, calls } = fixture({
+    async routeMessage() {
+      return {
+        intent: "credit_check_in_help",
+        mode: "local",
+        handled: true,
+        reply: "想簽到嗎？回我「我要簽到」確認後再執行。",
+      };
+    },
+  });
+  const result = await service.handle({
+    userId: "user-1",
+    message: "可以幫我領今天的點數嗎",
+  });
+  assert.equal(result.intent, "credit_check_in_help");
+  assert.equal(calls.checkIn, 0);
+  assert.equal(calls.agent, 0);
+});

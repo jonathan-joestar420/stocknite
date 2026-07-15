@@ -4,7 +4,8 @@ import {
   type AgentRequest,
   type AgentResponse,
 } from "../agent/adapter.js";
-import { routeIntent } from "../intents/router.js";
+import { routeIntent, type IntentRoute } from "../intents/router.js";
+import { semanticRouter } from "../intents/semantic-router.js";
 import { getMarketSentiment, getStockSummary } from "./market.js";
 import { listHoldings, upsertHolding } from "./portfolio.js";
 import {
@@ -24,6 +25,7 @@ export interface ConversationResult {
 }
 
 export interface ConversationDependencies {
+  routeMessage?: (message: string) => Promise<IntentRoute>;
   listHoldings(userId: string): Promise<DataRow[]>;
   getMarketSentiment(): Promise<DataRow | null>;
   getStockSummary(stockCode: string): Promise<DataRow | null>;
@@ -94,6 +96,8 @@ export function createConversationService(dependencies: ConversationDependencies
     invokeAgentCore: invokeAgent,
     credits,
   } = dependencies;
+  const resolveRoute = dependencies.routeMessage ??
+    (async (message: string) => routeIntent(message));
 
   async function authorizeAgentCore(userId: string, intent: string) {
     return credits.authorizeQuestion(userId, `${intent}:${randomUUID()}`);
@@ -117,11 +121,11 @@ export function createConversationService(dependencies: ConversationDependencies
   }
 
   return {
-    inspect: routeIntent,
+    inspect: resolveRoute,
 
     async handle({ userId, message }: { userId: string; message: string }): Promise<ConversationResult> {
       if (!userId) throw new Error("userId is required");
-      const route = routeIntent(message);
+      const route = await resolveRoute(message);
 
       if (route.mode === "agentcore") {
         if (route.intent === "analyze_holdings") {
@@ -271,6 +275,7 @@ export function createConversationService(dependencies: ConversationDependencies
 }
 
 export const conversationService = createConversationService({
+  routeMessage: (message) => semanticRouter.route(message),
   listHoldings: async (userId) => listHoldings(userId),
   getMarketSentiment: async () => getMarketSentiment(),
   getStockSummary: async (stockCode) => getStockSummary(stockCode),

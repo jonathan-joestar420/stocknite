@@ -3,6 +3,7 @@ export type IntentName =
   | "analyze_recent"
   | "analysis_choice"
   | "credit_check_in"
+  | "credit_check_in_help"
   | "credit_balance"
   | "credit_top_up"
   | "credit_top_up_help"
@@ -38,14 +39,15 @@ export interface IntentRoute {
 }
 
 export const ANALYSIS_CHOICE_REPLY = [
-  "這句我還沒接住～",
-  "你可以回「功能說明」，或直接試試「我的持股」、「2330」、「今日市場」。",
-  "想讓 AI 幫你整理時，再選「分析持股」或「分析近況」就好 🌙",
+  "這句我還沒看懂～可以換個方式告訴我嗎？",
+  "也可以回「功能說明」，我把現在能做的事整理給你 🌙",
 ].join("\n");
 
 export const STOCK_SAVING_REPLY = [
-  "你是想說「存股」嗎？🌙",
-  "如果想把手上的股票記進股奈，回「新增持股」；想看已記錄的部位，回「我的持股」。",
+  "想整理你的存股部位嗎？🌙",
+  "•「新增持股」：把手上的股票記進來",
+  "•「我的持股」：查看目前部位",
+  "•「分析持股」：請 AI 幫你整理",
 ].join("\n");
 
 export const HOLDING_INPUT_EXAMPLE =
@@ -65,6 +67,7 @@ const FIXED_REPLIES = {
     `「${HOLDING_INPUT_EXAMPLE}」`,
     "股票代號、股數、成本和買進日期都要有喔。",
   ].join("\n"),
+  checkInHelp: "想簽到嗎？回我「我要簽到」確認後，我再幫你領今天的點數～",
   topUpHelp: "想補多少點呢？目前有 10、30、100 點可以選。\n例如回我：「儲值 10 點」就好～",
   morningBrief: "晨報還在準備中～\n現在可以先回「分析近況」，我陪你看看市場資料。",
   settings: "晨報時間預計設在 07:00，目前還在開發中。\n想先看資料的話，回我「我的持股」就好～",
@@ -146,6 +149,9 @@ export function routeIntent(message: unknown): IntentRoute {
   if (/^(我要簽到|每日簽到|簽到|領點數|領credit)$/.test(text)) {
     return service("credit_check_in");
   }
+  if (text === "簽到說明") {
+    return fixed("credit_check_in_help", FIXED_REPLIES.checkInHelp);
+  }
   if (/^(我的點數|查點數|點數餘額|我的credit|credit餘額|credit)$/.test(text)) {
     return service("credit_balance");
   }
@@ -155,7 +161,7 @@ export function routeIntent(message: unknown): IntentRoute {
     return fixed("credit_top_up_help", FIXED_REPLIES.topUpHelp);
   }
 
-  if (/^(?:(?:我要|想要)\s*)?存[股骨]$/.test(text)) {
+  if (/^(?:(?:我要|我想|想要|想)\s*)?存股$/.test(text)) {
     return fixed("holding_create_help", STOCK_SAVING_REPLY);
   }
 
