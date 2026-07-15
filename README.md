@@ -21,7 +21,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 
 尚待串接或完成：正式付款驗證、啟用 credit 強制扣點、07:00 晨報排程，以及完整台股庫存確認／歷史交易流程。各部署環境仍須提供 AgentCore、LINE、資料庫與登入憑證。
 
-> 部署注意：先前使用的 EC2 `i-0405f0c7e4bdae5c4` 目前在現有 AWS 帳號／`us-west-2` 查無實例；重新部署前需確認 instance ID 與 AWS 環境。
+> Production 目標：AWS 帳號 `116659181302`、`us-west-2`、EC2 `i-0405f0c7e4bdae5c4`。部署腳本會在操作前再次驗證帳號與 SSM Online 狀態。
 
 ## 第一版 LINE 按鈕
 
@@ -143,9 +143,19 @@ EC2 instance role 需要對應的 `bedrock-agentcore:InvokeAgentRuntime` 或 `be
 
 ## EC2 部署
 
-部署邏輯集中在 `scripts/deploy-ec2.sh`，環境檔由 `scripts/render-env.py` 產生；SSM 只負責下載封裝檔並執行腳本，不承載多行部署內容。
+部署邏輯分成兩層：
 
-部署腳本會安裝 production dependencies、更新受保護的環境檔、依檔名順序套用所有 `sql/*.sql`、切換 `/opt/stocknite/current` symlink、重啟 systemd service，再檢查 `/api/health`。SQL migration 必須可重複執行。
+- `scripts/deploy-via-ssm.sh` 從目前 commit 建立 detached worktree，執行 typecheck／test／乾淨 build，寫入 commit manifest，將最小 production artifact 暫存到 S3，再透過 SSM 要求 EC2 下載並部署。SSM 結束後會刪除暫存 artifact；若命令狀態無法確認，則保留 artifact 並要求人工檢查。
+- `scripts/deploy-ec2.sh` 在 EC2 安裝 production dependencies、更新受保護的環境檔、依檔名順序套用所有 `sql/*.sql`、切換 `/opt/stocknite/current` symlink、重啟 systemd service，再檢查 `/api/health`。SQL migration 必須可重複執行，並與前一版程式 backward-compatible。
+
+不要直接拼接多段 SSM 部署指令，也不要直接編輯線上 release。先載入 AWS 臨時憑證，再從乾淨的 repository 執行：
+
+```bash
+export AWS_REGION=us-west-2
+bash scripts/deploy-via-ssm.sh
+```
+
+預設目標是帳號 `116659181302`、EC2 `i-0405f0c7e4bdae5c4` 與 artifact bucket `aic-cmoney-resource`。腳本會拒絕錯誤帳號、離線 instance 或尚未 commit 的 working tree；切版後任何權限、內外部 health 或 manifest 檢查失敗時，會恢復先前 symlink、受保護 env 與 systemd unit。可透過 `INSTANCE_ID`、`DEPLOY_BUCKET`、`EXPECTED_AWS_ACCOUNT_ID` 與 `HEALTH_URL` 覆寫目標。
 
 建議路徑 `/opt/stocknite/current`，Node.js 僅監聽 `127.0.0.1:3000`，由 Caddy 對外提供 HTTPS。參考 `deploy/stocknite.service` 與 `deploy/Caddyfile.example`。PostgreSQL 應繼續只監聽 `127.0.0.1:5432`。
 

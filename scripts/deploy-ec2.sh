@@ -10,13 +10,23 @@ AWS_REGION="${AWS_REGION:-us-west-2}"
 SERVICE_NAME="stocknite"
 RELEASE="$(date -u +%Y%m%d%H%M%S)"
 RELEASE_DIR="$APP_ROOT/releases/$RELEASE"
+TEMP_ENV=""
+ACTIVATED=false
 
 log() { printf '[stocknite-deploy] %s\n' "$*"; }
 fail() {
   log "deployment failed near line $1"
   systemctl status "$SERVICE_NAME" --no-pager || true
 }
+cleanup() {
+  local status=$?
+  [[ -z "$TEMP_ENV" ]] || rm -f "$TEMP_ENV"
+  if [[ "$status" -ne 0 && "$ACTIVATED" != true ]]; then
+    rm -rf "$RELEASE_DIR"
+  fi
+}
 trap 'fail $LINENO' ERR
+trap cleanup EXIT
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "deploy script must run as root" >&2
@@ -67,6 +77,7 @@ done
 
 log "activating release"
 ln -sfn "$RELEASE_DIR" "$APP_ROOT/current"
+ACTIVATED=true
 install -o root -g root -m 644 \
   "$RELEASE_DIR/deploy/stocknite.service" \
   "/etc/systemd/system/stocknite.service"

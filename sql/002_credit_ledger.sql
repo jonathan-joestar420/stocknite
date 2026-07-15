@@ -24,7 +24,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS credit_ledger_reference_once
 CREATE INDEX IF NOT EXISTS credit_ledger_user_created_at
   ON app_data.credit_ledger (user_id, created_at DESC);
 
-REVOKE UPDATE, DELETE ON app_data.credit_ledger FROM stocknite_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON app_data.credit_ledger FROM stocknite_app;
 GRANT SELECT, INSERT ON app_data.credit_ledger TO stocknite_app;
 GRANT USAGE, SELECT ON SEQUENCE app_data.credit_ledger_id_seq TO stocknite_app;
 

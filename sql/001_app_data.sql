@@ -42,5 +42,7 @@ CREATE TABLE IF NOT EXISTS app_data.notification_settings (
 );
 
 GRANT USAGE ON SCHEMA app_data TO stocknite_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA app_data TO stocknite_app;
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON app_data.users, app_data.portfolio_holdings, app_data.notification_settings
+  TO stocknite_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app_data TO stocknite_app;
