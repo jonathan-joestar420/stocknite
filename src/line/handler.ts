@@ -1,6 +1,5 @@
 import { invokeAgentCore } from "../agent/adapter.js";
 import { conversationService } from "../services/conversation.js";
-import { getMarketSentiment, getStockSummary } from "../services/market.js";
 import { listHoldings, removeHolding, upsertHolding } from "../services/portfolio.js";
 import { getLineMessageContent, replyLine } from "./client.js";
 
@@ -62,10 +61,6 @@ type LineEvent = {
   postback?: { data?: string };
 };
 
-function asText(value: unknown): string {
-  return JSON.stringify(value, null, 2).slice(0, 4500);
-}
-
 function num(v: unknown, digits = 0): string {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: digits }) : "—";
@@ -119,12 +114,12 @@ function formatHoldings(rows: Array<Record<string, unknown>>): string {
 
 async function resolveAction(event: LineEvent): Promise<string> {
   const userId = event.source?.userId;
-  if (!userId) return "目前只支援一對一聊天。";
+  if (!userId) return "這裡目前只支援一對一聊天喔～";
 
   // 圖片訊息（持股截圖）：下載 -> base64 -> 交給 agent 解析 -> 後端寫入
   if (event.message?.type === "image" && event.message.id) {
     const image = await getLineMessageContent(event.message.id);
-    if (!image) return "圖片下載失敗，請重新上傳，或改用文字輸入持股。";
+    if (!image) return "圖片好像沒有下載成功～請再傳一次，或改用文字輸入持股。";
     const holdings = await listHoldings(userId).catch(() => []);
     const agent = await invokeAgentCore({
       userId,
@@ -139,25 +134,17 @@ async function resolveAction(event: LineEvent): Promise<string> {
 
   const action = new URLSearchParams(event.postback?.data ?? "").get("action");
   const text = event.message?.text?.trim() ?? "";
-  if (action === "stock_search") return "請輸入股票代號，例如：2330";
-  if (action === "market_today" || text === "今日市場" || text === "市場情緒") {
-    const data = await getMarketSentiment();
-    return `最新市場情緒資料：\n${asText(data)}\n情緒代表討論傾向，不是漲跌預測。`;
-  }
+  if (action === "stock_search") return "想查哪一檔呢？直接回股票代號就好，例如：2330 🌙";
   if (action === "portfolio_view" || text === "我的持股") {
     const data = await listHoldings(userId) as Array<Record<string, unknown>>;
     return formatHoldings(data);
   }
-  if (action === "settings" || text === "設定") {
-    return "設定功能：晨報時間 07:00（開發中）\n可輸入「我的持股」查看資料。";
-  }
-  const stockCode = text.match(/^\d{4,6}$/)?.[0];
-  if (stockCode) {
-    const data = await getStockSummary(stockCode);
-    return data ? `${stockCode} 股票摘要：\n${asText(data)}\n資料截至 2025-12-31。` :
-      `找不到股票 ${stockCode}。`;
-  }
-  const result = await conversationService.handle({ userId, message: text });
+  const conversationText = action === "market_today"
+    ? "今日市場"
+    : action === "settings"
+      ? "設定"
+      : text;
+  const result = await conversationService.handle({ userId, message: conversationText });
   return result.answer;
 }
 
@@ -165,14 +152,14 @@ export async function handleLineEvent(event: LineEvent): Promise<void> {
   if (!event.replyToken) return;
   try {
     const text = event.type === "follow"
-      ? "嗨，我是股奈 🌙\n輸入 2330、今日市場或我的持股開始使用。"
+      ? "嗨，我是股奈 🌙\n想先看看「我的持股」、「今日市場」，還是查一檔股票？直接跟我說就好～"
       : await resolveAction(event);
     await replyLine(event.replyToken, [{ type: "text", text }]);
   } catch (error) {
     console.error("LINE event failed", error);
     await replyLine(event.replyToken, [{
       type: "text",
-      text: "目前無法完成查詢，請稍後再試。",
+      text: "剛剛好像卡住了～請稍後再試一次；如果一直失敗，再回來找我。",
     }]);
   }
 }

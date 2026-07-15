@@ -47,7 +47,7 @@ function formatNumber(value: unknown, digits = 0): string {
 
 function formatHoldings(rows: DataRow[]): string {
   if (!rows.length) {
-    return "你目前沒有持股。請先輸入「我要儲存股票」查看新增格式。";
+    return "目前還沒有看到你的持股～\n回我「新增持股」，我會告訴你怎麼記進來。";
   }
   return [
     "你目前的持股：",
@@ -58,7 +58,7 @@ function formatHoldings(rows: DataRow[]): string {
 }
 
 function formatMarket(market: DataRow | null): string {
-  if (!market) return "目前沒有可用的市場近況資料。";
+  if (!market) return "今天的市場資料還沒準備好～請晚一點再來看看。";
   return [
     `市場資料日期：${market.activity_date ?? "—"}`,
     `討論數：${formatNumber(market.posts)}`,
@@ -130,7 +130,7 @@ export function createConversationService(dependencies: ConversationDependencies
             return {
               mode: "local",
               intent: "analyze_holdings_empty",
-              answer: "你目前沒有持股。請先輸入「我要儲存股票」完成新增。",
+              answer: "目前還沒有持股可以分析～\n先回我「新增持股」，把手上的股票記進來吧。",
             };
           }
 
@@ -139,7 +139,7 @@ export function createConversationService(dependencies: ConversationDependencies
             return {
               mode: "local",
               intent: "insufficient_credit",
-              answer: "點數不足。可以先輸入「我要簽到」或「我要儲值」。",
+              answer: "這次點數不夠，還不能開始分析～\n可以先回「我要簽到」或「我要儲值」。",
               credit: authorization,
             };
           }
@@ -171,7 +171,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: "insufficient_credit",
-            answer: "點數不足。可以先輸入「我要簽到」或「我要儲值」。",
+            answer: "這次點數不夠，還不能開始分析～\n可以先回「我要簽到」或「我要儲值」。",
             credit: authorization,
           };
         }
@@ -206,7 +206,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: route.intent,
-            answer: formatStock(stock) ?? `找不到股票 ${stockCode}。`,
+            answer: formatStock(stock) ?? `我找不到股票 ${stockCode} 耶～\n再確認一下代號，或換一檔試試看。`,
           };
         }
         case "holding_create": {
@@ -224,7 +224,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: route.intent,
-            answer: `已儲存 ${stockCode} ${formatNumber(quantity)} 股 ✅\n${formatHoldings(holdings)}`,
+            answer: `收到了，已幫你記下 ${stockCode} ${formatNumber(quantity)} 股 ✅\n${formatHoldings(holdings)}`,
           };
         }
         case "credit_check_in": {
@@ -234,8 +234,8 @@ export function createConversationService(dependencies: ConversationDependencies
             mode: "local",
             intent: route.intent,
             answer: result.awarded
-              ? `簽到成功，獲得 ${result.awardedCredits} credit！目前記帳餘額 ${result.balance} 點。${mode}`
-              : `今天已經簽到過了，目前記帳餘額 ${result.balance} 點。${mode}`,
+              ? `簽到完成～獲得 ${result.awardedCredits} credit！目前記帳餘額是 ${result.balance} 點。${mode}`
+              : `今天已經簽過到囉～目前記帳餘額是 ${result.balance} 點。${mode}`,
             credit: result,
           };
         }
@@ -244,7 +244,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: route.intent,
-            answer: `目前記帳餘額 ${result.balance} credit。${creditModeText(result.unlimited)}`,
+            answer: `你目前的記帳餘額是 ${result.balance} credit。${creditModeText(result.unlimited)}`,
             credit: result,
           };
         }
@@ -255,7 +255,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: route.intent,
-            answer: `已儲值 ${result.addedCredits} credit，目前記帳餘額 ${result.balance} 點。${creditModeText(result.unlimited)}`,
+            answer: `補好了～這次加入 ${result.addedCredits} credit，目前記帳餘額是 ${result.balance} 點。${creditModeText(result.unlimited)}`,
             credit: result,
           };
         }
@@ -263,7 +263,7 @@ export function createConversationService(dependencies: ConversationDependencies
           return {
             mode: "local",
             intent: route.intent,
-            answer: route.reply ?? "請輸入「功能說明」查看可用功能。",
+            answer: route.reply ?? "這個指令我還沒接住～回「功能說明」看看我現在能做什麼。",
           };
       }
     },

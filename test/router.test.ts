@@ -2,12 +2,34 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { routeIntent } from "../src/intents/router.js";
 
-test("unknown messages always return a fixed local analysis choice", () => {
-  const result = routeIntent("台積電今天怎麼了？");
+test("unknown messages return a warm local choice without pretending to understand", () => {
+  const result = routeIntent("123");
   assert.equal(result.mode, "local");
   assert.equal(result.intent, "analysis_choice");
+  assert.match(result.reply ?? "", /還沒接住/);
+  assert.match(result.reply ?? "", /功能說明/);
   assert.match(result.reply ?? "", /分析持股/);
   assert.match(result.reply ?? "", /分析近況/);
+  assert.doesNotMatch(result.reply ?? "", /我目前只會/);
+});
+
+test("common stock-saving typo gets a specific friendly prompt", () => {
+  const result = routeIntent("存骨");
+  assert.equal(result.mode, "local");
+  assert.equal(result.intent, "holding_create_help");
+  assert.match(result.reply ?? "", /想說「存股」/);
+  assert.match(result.reply ?? "", /新增持股/);
+  assert.match(result.reply ?? "", /我的持股/);
+});
+
+test("help groups real commands into natural choices", () => {
+  const result = routeIntent("功能說明");
+  assert.equal(result.mode, "local");
+  assert.equal(result.intent, "help");
+  assert.match(result.reply ?? "", /想做什麼/);
+  assert.match(result.reply ?? "", /看資料/);
+  assert.match(result.reply ?? "", /記錄與點數/);
+  assert.match(result.reply ?? "", /AI 整理/);
 });
 
 test("only explicit analysis choices reach AgentCore", () => {

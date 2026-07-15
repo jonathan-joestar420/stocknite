@@ -38,36 +38,39 @@ export interface IntentRoute {
 }
 
 export const ANALYSIS_CHOICE_REPLY = [
-  "我目前只會在你明確選擇後使用 AI 分析。",
-  "請直接回覆「分析持股」或「分析近況」。",
-  "也可以輸入「功能說明」查看其他操作。",
+  "這句我還沒接住～",
+  "你可以回「功能說明」，或直接試試「我的持股」、「2330」、「今日市場」。",
+  "想讓 AI 幫你整理時，再選「分析持股」或「分析近況」就好 🌙",
+].join("\n");
+
+export const STOCK_SAVING_REPLY = [
+  "你是想說「存股」嗎？🌙",
+  "如果想把手上的股票記進股奈，回「新增持股」；想看已記錄的部位，回「我的持股」。",
 ].join("\n");
 
 export const HOLDING_INPUT_EXAMPLE =
-  "請用這個格式輸入：新增持股 2330 50股 成本600 買進日2025-12-30";
+  "新增持股 2330 50股 成本600 買進日2025-12-30";
 
 const FIXED_REPLIES = {
-  greeting: "嗨，我是股奈 🌙\n你可以查看持股、查股票、每日簽到，或選擇分析持股／分析近況。",
-  thanks: "不客氣～需要時可以輸入「功能說明」。",
+  greeting: "嗨，我是股奈 🌙\n想先看看「我的持股」、「今日市場」，還是讓我「分析近況」？",
+  thanks: "不客氣～有想看的股票或持股，直接跟我說就好 🌙",
   help: [
-    "目前可用功能：",
-    "• 我的持股",
-    "• 查詢股票，例如：2330",
-    "• 今日市場",
-    "• 新增持股",
-    "• 我要簽到",
-    "• 我的點數",
-    "• 我要儲值",
-    "• 分析持股",
-    "• 分析近況",
+    "想做什麼？直接丟一句給我就好 🌙",
+    "• 看資料：「我的持股」、「2330」、「今日市場」",
+    "• 記錄與點數：「新增持股」、「我要簽到」、「我的點數」、「我要儲值」",
+    "• AI 整理：「分析持股」、「分析近況」",
   ].join("\n"),
-  holdingCreateHelp: HOLDING_INPUT_EXAMPLE,
-  topUpHelp: "請選擇儲值點數：10、30 或 100 點。\n例如輸入：儲值 10 點",
-  morningBrief: "早安摘要功能仍在準備中，目前可以先使用「分析近況」。",
-  settings: "設定功能：晨報時間 07:00（開發中）。\n可輸入「我的持股」查看資料。",
-  website: "網頁版：https://stocknite.zzeric.com/me",
-  dataDate: "目前示範市場資料截至 2025-12-31，並非即時行情。",
-  advice: "股奈不提供明牌或買賣指令，但可以幫你做「分析持股」或「分析近況」。",
+  holdingCreateHelp: [
+    "把資料照這樣告訴我就好～",
+    `「${HOLDING_INPUT_EXAMPLE}」`,
+    "股票代號、股數、成本和買進日期都要有喔。",
+  ].join("\n"),
+  topUpHelp: "想補多少點呢？目前有 10、30、100 點可以選。\n例如回我：「儲值 10 點」就好～",
+  morningBrief: "晨報還在準備中～\n現在可以先回「分析近況」，我陪你看看市場資料。",
+  settings: "晨報時間預計設在 07:00，目前還在開發中。\n想先看資料的話，回我「我的持股」就好～",
+  website: "想看完整儀表板，可以從這裡登入：\nhttps://stocknite.zzeric.com/me",
+  dataDate: "目前使用的是截至 2025-12-31 的示範資料，不是即時行情喔。",
+  advice: "我不能替你下買賣決定，不過可以陪你把資料看清楚～\n回「分析持股」看部位，或「分析近況」看市場。",
 };
 
 export function normalizeMessage(value: unknown): string {
@@ -115,7 +118,7 @@ function parseHoldingCreate(text: string): IntentRoute | null {
   if (missing.length) {
     return fixed(
       "holding_create_help",
-      `還缺少：${missing.join("、")}。\n${HOLDING_INPUT_EXAMPLE}`,
+      `還差一點～請再補上：${missing.join("、")}。\n例如：「${HOLDING_INPUT_EXAMPLE}」`,
       { missing },
     );
   }
@@ -150,6 +153,10 @@ export function routeIntent(message: unknown): IntentRoute {
   if (topUp?.[1]) return service("credit_top_up", { credits: Number(topUp[1]) });
   if (/^(我要儲值|儲值|儲值credit|儲值點數)$/.test(text)) {
     return fixed("credit_top_up_help", FIXED_REPLIES.topUpHelp);
+  }
+
+  if (/^(?:(?:我要|想要)\s*)?存[股骨]$/.test(text)) {
+    return fixed("holding_create_help", STOCK_SAVING_REPLY);
   }
 
   const holdingCreate = parseHoldingCreate(text);
