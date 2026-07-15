@@ -11,6 +11,8 @@
   },
   "engines": { "node": ">=22" },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "3.1087.0",
+    "@aws-sdk/client-bedrock-runtime": "3.1087.0",
     "fastify": "5.10.0",
     "pg": "8.22.0"
   },

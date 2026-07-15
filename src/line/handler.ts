@@ -44,8 +44,13 @@ async function resolveAction(event: LineEvent): Promise<string> {
     return data ? `${stockCode} 股票摘要：\n${asText(data)}\n資料截至 2025-12-31。` :
       `找不到股票 ${stockCode}。`;
   }
-  const agent = await invokeAgentCore({ userId, message: text });
-  return `${agent.answer}${agent.data ? `\n${asText(agent.data)}` : ""}`;
+  const holdings = await listHoldings(userId).catch(() => []);
+  const agent = await invokeAgentCore({
+    userId,
+    message: text,
+    evidence: holdings.length ? { holdings } : undefined,
+  });
+  return agent.answer;
 }
 
 export async function handleLineEvent(event: LineEvent): Promise<void> {

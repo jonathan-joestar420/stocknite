@@ -32,7 +32,7 @@ app.get("/privacy", async (_, reply) => reply.type("text/plain").send(
 app.get("/api/health", async () => ({
   status: "ok", database: await databaseHealth(),
   lineConfigured: Boolean(config.lineChannelSecret && config.lineAccessToken),
-  agentCoreConfigured: Boolean(config.agentCoreEndpoint),
+  agentCoreConfigured: Boolean(config.agentCoreArn || config.agentCoreEndpoint),
 }));
 app.get("/api/line/menu", async () => ({ buttons: lineMenu }));
 
