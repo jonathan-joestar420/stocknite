@@ -14,9 +14,14 @@ CREATE TABLE IF NOT EXISTS app_data.portfolio_holdings (
   stock_code text NOT NULL,
   quantity numeric(18, 4) NOT NULL CHECK (quantity > 0),
   average_cost numeric(18, 4) CHECK (average_cost >= 0),
+  purchase_date date,
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, stock_code)
 );
+
+-- 既有資料庫補欄位（idempotent）
+ALTER TABLE app_data.portfolio_holdings
+  ADD COLUMN IF NOT EXISTS purchase_date date;
 
 CREATE TABLE IF NOT EXISTS app_data.notification_settings (
   user_id uuid PRIMARY KEY REFERENCES app_data.users(id) ON DELETE CASCADE,

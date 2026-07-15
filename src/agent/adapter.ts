@@ -12,6 +12,8 @@ export interface AgentRequest {
   userId: string;
   message: string;
   evidence?: unknown;
+  imageBase64?: string;
+  imageMime?: string;
 }
 
 export interface AgentResponse {
@@ -45,7 +47,11 @@ export async function invokeAgentCore(
     if (!response.ok) throw new Error(`AgentCore returned ${response.status}`);
     return { mode: "agentcore", ...(await response.json() as object) } as AgentResponse;
   }
-  return invokeBedrock(request);
+  // DEBUG 模式：只走 AgentCore，停用 Bedrock 後備。
+  // 若未設定 AgentCore，直接拋錯以便確認 agent 溝通問題（不要靜默 fallback）。
+  throw new Error(
+    "AgentCore 未設定（缺 AGENTCORE_ARN / AGENTCORE_ENDPOINT）；已停用 Bedrock 後備。",
+  );
 }
 
 const DISCLAIMER = "（僅供參考，非投資建議）";
@@ -72,29 +78,65 @@ const agentCore = new BedrockAgentCoreClient({ region: config.awsRegion });
 export async function invokeAgentRuntime(
   request: AgentRequest,
 ): Promise<AgentResponse> {
+  const evidence = request.evidence as { holdings?: unknown } | undefined;
+  const payload: Record<string, unknown> = {
+    prompt: request.message,
+    line_user_id: request.userId,
+  };
+  if (evidence?.holdings) payload.current_holdings = evidence.holdings;
+  if (request.imageBase64) {
+    payload.image_base64 = request.imageBase64;
+    payload.image_mime = request.imageMime ?? "image/jpeg";
+  }
   const command = new InvokeAgentRuntimeCommand({
     agentRuntimeArn: config.agentCoreArn,
     qualifier: config.agentCoreQualifier,
     runtimeSessionId: sessionIdFor(request.userId),
     contentType: "application/json",
     accept: "application/json",
-    payload: new TextEncoder().encode(
-      JSON.stringify({ prompt: buildPrompt(request) }),
-    ),
+    payload: new TextEncoder().encode(JSON.stringify(payload)),
   });
 
-  const out = await agentCore.send(command);
-  const text = out.response ? await out.response.transformToString() : "";
-  let answer = text;
+  let out;
   try {
-    const parsed = JSON.parse(text) as { result?: unknown; answer?: unknown };
-    const value = parsed.result ?? parsed.answer;
-    if (typeof value === "string") answer = value;
-    else if (value !== undefined) answer = JSON.stringify(value);
+    out = await agentCore.send(command);
+  } catch (error) {
+    console.error("[agentcore] invoke failed", {
+      arn: config.agentCoreArn,
+      qualifier: config.agentCoreQualifier,
+      error: (error as Error).message,
+    });
+    throw error;
+  }
+  const text = out.response ? await out.response.transformToString() : "";
+  console.info("[agentcore] ok", {
+    statusCode: out.statusCode,
+    contentType: out.contentType,
+    bytes: text.length,
+  });
+
+  // 解析 agent 回應。相容兩種形態：
+  //  - 純聊天字串（可能包在 {result:"..."} / {answer:"..."}）
+  //  - 結構化 intent 物件（{intent, reply, holdings, stock_code}，可能包在 {result:{...}}）
+  let answer = text;
+  let data: unknown;
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    let core: unknown = parsed.result ?? parsed.answer ?? parsed;
+    if (typeof core === "string") {
+      try { core = JSON.parse(core); } catch { /* 純文字 */ }
+    }
+    if (core && typeof core === "object") {
+      data = core;
+      const reply = (core as Record<string, unknown>).reply;
+      answer = typeof reply === "string" ? reply : JSON.stringify(core);
+    } else if (typeof core === "string") {
+      answer = core;
+    }
   } catch {
     // 非 JSON，直接當純文字回覆
   }
-  return { mode: "agentcore", answer: guardCompliance(answer) };
+  return { mode: "agentcore", answer: guardCompliance(answer), data };
 }
 
 const SYSTEM_PROMPT = [
