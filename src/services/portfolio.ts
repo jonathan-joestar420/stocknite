@@ -11,7 +11,7 @@ async function ensureUser(lineUserId: string) {
 
 export async function listHoldings(lineUserId: string) {
   return query(`
-    SELECT h.stock_code, s.stock_name, h.quantity, h.average_cost,
+    SELECT h.stock_code, s.stock_name, h.quantity, h.average_cost, h.purchase_date,
       NULLIF(s.close_price, '')::numeric AS close_price,
       h.quantity * NULLIF(s.close_price, '')::numeric AS market_value,
       CASE WHEN SUM(h.quantity * NULLIF(s.close_price, '')::numeric) OVER () > 0
@@ -24,14 +24,17 @@ export async function listHoldings(lineUserId: string) {
 }
 
 export async function upsertHolding(
-  lineUserId: string, stockCode: string, quantity: number, averageCost?: number,
+  lineUserId: string, stockCode: string, quantity: number,
+  averageCost?: number, purchaseDate?: string,
 ) {
   const userId = await ensureUser(lineUserId);
   await query(`INSERT INTO app_data.portfolio_holdings
-    (user_id, stock_code, quantity, average_cost) VALUES ($1, $2, $3, $4)
+    (user_id, stock_code, quantity, average_cost, purchase_date)
+    VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT (user_id, stock_code) DO UPDATE SET
       quantity = EXCLUDED.quantity, average_cost = EXCLUDED.average_cost,
-      updated_at = now()`, [userId, stockCode, quantity, averageCost ?? null]);
+      purchase_date = EXCLUDED.purchase_date, updated_at = now()`,
+  [userId, stockCode, quantity, averageCost ?? null, purchaseDate ?? null]);
   return listHoldings(lineUserId);
 }
 

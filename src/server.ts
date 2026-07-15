@@ -60,15 +60,15 @@ app.get("/api/portfolio", async (request, reply) => {
   if (!id) return reply.code(401).send({ error: "missing_line_user" });
   return listHoldings(id);
 });
-app.post<{ Body: { stockCode?: string; quantity?: number; averageCost?: number } }>(
+app.post<{ Body: { stockCode?: string; quantity?: number; averageCost?: number; purchaseDate?: string } }>(
   "/api/portfolio/holdings", async (request, reply) => {
     const id = userId(request);
-    const { stockCode, quantity, averageCost } = request.body;
+    const { stockCode, quantity, averageCost, purchaseDate } = request.body;
     if (!id) return reply.code(401).send({ error: "missing_line_user" });
     if (!stockCode || !quantity || quantity <= 0) {
       return reply.code(400).send({ error: "invalid_holding" });
     }
-    return upsertHolding(id, stockCode, quantity, averageCost);
+    return upsertHolding(id, stockCode, quantity, averageCost, purchaseDate);
   });
 app.delete<{ Params: { code: string } }>(
   "/api/portfolio/holdings/:code", async (request, reply) => {
