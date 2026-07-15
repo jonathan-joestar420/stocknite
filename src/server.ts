@@ -7,6 +7,7 @@ import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
 import { createHolding, listHoldings, removeHolding, updateHolding, upsertHolding } from "./services/portfolio.js";
+import { buildDashboard } from "./services/dashboard.js";
 import {
   authorizeUrl, exchangeCodeForUserId, newState, readCookie, signSession, verifySession,
 } from "./line/login.js";
@@ -104,6 +105,13 @@ app.post("/api/analyze", async (request, reply) => {
     evidence: { holdings, details },
   });
   return { answer: res.answer };
+});
+
+// 持股儀表板資料（限登入者）：每檔持股的價格走勢、社群情緒走勢與白話解讀。
+app.get("/api/dashboard", async (request, reply) => {
+  const userId = sessionUser(request);
+  if (!userId) return reply.code(401).send({ error: "login_required" });
+  return buildDashboard(userId);
 });
 
 // AI 助手（AgentCore）：限登入者，用本人 lineUserId（效果同 LINE bot）。
