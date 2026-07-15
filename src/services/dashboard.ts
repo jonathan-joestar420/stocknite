@@ -21,16 +21,18 @@ function buildInsight(params: {
   const { buyPointPct, pnlPct, bull, bear, sentimentTrend } = params;
 
   if (pnlPct !== null) {
-    parts.push(pnlPct >= 0 ? `帳面獲利 ${pnlPct.toFixed(1)}%` : `帳面虧損 ${Math.abs(pnlPct).toFixed(1)}%`);
+    parts.push(pnlPct >= 0
+      ? `你目前帳面賺 ${pnlPct.toFixed(1)}%（現價比你的成本高）`
+      : `你目前帳面賠 ${Math.abs(pnlPct).toFixed(1)}%（現價比你的成本低）`);
   }
   if (buyPointPct !== null) {
-    const pos = buyPointPct >= 80 ? "接近今年高點" : buyPointPct <= 20 ? "接近今年低點" : "位於今年區間中段";
-    parts.push(`股價${pos}（區間 ${buyPointPct.toFixed(0)}%）`);
+    const pos = buyPointPct >= 80 ? "接近今年最高點，屬於追高區" : buyPointPct <= 20 ? "接近今年最低點" : "在今年高低之間的中段";
+    parts.push(`股價${pos}（今年區間位置 ${buyPointPct.toFixed(0)}%，越接近 100% 代表越貴）`);
   }
   if (bull + bear > 0) {
     const ratio = bear === 0 ? bull : bull / bear;
-    const mood = bull >= bear ? "偏多" : "偏空";
-    parts.push(`社群情緒${mood}（多空約 ${ratio.toFixed(1)} 倍，${sentimentTrend}）`);
+    const mood = bull >= bear ? "偏樂觀" : "偏保守";
+    parts.push(`最近社群氣氛${mood}：看多的討論大約是看空的 ${ratio.toFixed(1)} 倍，且${sentimentTrend}`);
   }
   const base = parts.join("；");
   return base ? `${base}。（僅供參考，非投資建議）` : "資料不足，無法解讀。";

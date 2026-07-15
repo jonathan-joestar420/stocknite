@@ -95,8 +95,17 @@ a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:cent
 .dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-top:12px}
 .dcard{background:#101d2e;border-radius:14px;padding:16px}
 .dcard h4{margin:0 0 8px;color:#f4f7fa}
-.dcard .ins{color:#a8b3c2;font-size:13px;line-height:1.7;margin-top:10px}
+.dcard .ins{color:#dbe4ee;font-size:13px;line-height:1.7;margin-top:10px;background:#0a1626;padding:10px 12px;border-radius:10px}
+.dcard .metrics{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:8px 0}
+.dcard .metrics span{font-size:13px;color:#c6d0dc}
+.dcard .metrics b{display:block;color:#8894a3;font-size:11px;font-weight:500}
+.dcard .metrics em{font-style:normal;font-weight:700}
+.dcard .cap{font-size:11px;color:#8894a3;margin:10px 0 2px}
 canvas{max-width:100%}
+.typing{display:inline-flex;gap:4px;align-items:center;height:14px}
+.typing i{width:6px;height:6px;border-radius:50%;background:#7ee0b5;opacity:.4;animation:blink 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
 .fab{position:fixed;right:20px;bottom:20px;z-index:50;border:0;border-radius:999px;padding:14px 20px;background:#00c300;color:#fff;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4)}
 .chatbox{position:fixed;right:20px;bottom:20px;z-index:51;width:min(380px,92vw);height:min(560px,80vh);background:#0c1a2b;border:1px solid #22374f;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .chatbox-head{padding:14px 16px;background:#13324a;font-weight:700;display:flex;justify-content:space-between;align-items:center}
@@ -123,7 +132,7 @@ ${rows}</table>
 </section>
 
 <h2 style="margin-top:28px;color:#7ee0b5">持股洞察儀表板</h2>
-<small>每檔持股的股價走勢（含你的成本線）與社群多空情緒趨勢。</small>
+<small>依你的實際庫存即時計算。名詞小抄：<b>成本線</b>=你買進的平均價；股價在成本線上方＝現在帳面賺。<b>今年區間位置</b>：0%＝今年最低、100%＝今年最高（越高代表越貴、追高風險越大）。<b>看多/看空</b>＝社群裡覺得會漲/會跌的討論則數。</small>
 <div id="dashboard" class="dash">載入中…</div>
 
 <button id="fab" class="fab" onclick="toggleChat()">💬 我的投資助手</button>
@@ -153,16 +162,33 @@ function toggleChat(){
 function addMsg(text,me){ var c=document.getElementById('chat'); var el=document.createElement('div'); el.className='msg'+(me?' me':''); el.textContent=text; c.appendChild(el); c.scrollTop=c.scrollHeight; return el; }
 async function sendChat(){
   var input=document.getElementById('chatInput'); var msg=input.value.trim(); if(!msg)return;
-  addMsg(msg,true); input.value=''; var pending=addMsg('思考中…',false);
+  addMsg(msg,true); input.value='';
+  var c=document.getElementById('chat'); var pending=document.createElement('div');
+  pending.className='msg'; pending.innerHTML='<span class="typing"><i></i><i></i><i></i></span>';
+  c.appendChild(pending); c.scrollTop=c.scrollHeight;
   try{ var r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); var d=await r.json(); pending.textContent=d.answer||d.error||'發生錯誤'; }
   catch(e){ pending.textContent='連線失敗，請稍後再試。'; }
+  c.scrollTop=c.scrollHeight;
 }
+function nfmt(v,d){ var n=Number(v); return isFinite(n)? n.toLocaleString('en-US',{maximumFractionDigits:d||0}) : '—'; }
 function renderCard(parent,c){
   var div=document.createElement('div'); div.className='dcard';
   var title=document.createElement('h4'); title.textContent=(c.stock_name||'')+' '+c.stock_code; div.appendChild(title);
-  var pc=document.createElement('canvas'); var sc=document.createElement('canvas');
-  div.appendChild(pc); div.appendChild(sc);
-  var ins=document.createElement('div'); ins.className='ins'; ins.textContent=c.insight; div.appendChild(ins);
+  // 指標列（標籤 + 數值，讓小白一眼看懂）
+  var m=document.createElement('div'); m.className='metrics';
+  var pnl = c.pnlPct==null?'—':((c.pnlPct>=0?'+':'')+c.pnlPct.toFixed(1)+'%');
+  var pnlCls = c.pnlPct==null?'':(c.pnlPct>=0?'up':'down');
+  m.innerHTML =
+    '<span><b>現價</b>'+nfmt(c.close_price,2)+'</span>'+
+    '<span><b>你的成本</b>'+nfmt(c.average_cost,2)+'</span>'+
+    '<span><b>帳面損益</b><em class="'+pnlCls+'">'+pnl+'</em></span>'+
+    '<span><b>今年區間位置</b>'+(c.buyPointPct==null?'—':c.buyPointPct.toFixed(0)+'%')+'</span>';
+  div.appendChild(m);
+  var cap1=document.createElement('div'); cap1.className='cap'; cap1.textContent='股價走勢（近90日）：綠線＝股價，紅虛線＝你的成本。綠線在紅線上方＝帳面賺。';
+  var pc=document.createElement('canvas'); div.appendChild(cap1); div.appendChild(pc);
+  var cap2=document.createElement('div'); cap2.className='cap'; cap2.textContent='社群多空討論（近60日）：紅線＝看多則數，綠線＝看空則數。紅線高＝氣氛偏樂觀。';
+  var sc=document.createElement('canvas'); div.appendChild(cap2); div.appendChild(sc);
+  var ins=document.createElement('div'); ins.className='ins'; ins.textContent='💡 '+c.insight; div.appendChild(ins);
   parent.appendChild(div);
   var labels=c.priceHistory.map(function(x){return x.d;});
   var ds=[{label:'股價',data:c.priceHistory.map(function(x){return x.c;}),borderColor:'#7ee0b5',pointRadius:0,tension:.2}];
