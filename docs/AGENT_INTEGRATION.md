@@ -30,9 +30,15 @@
 ```
 
 - `prompt`：使用者文字。純截圖訊息時，`prompt` 會是一句指示（例如「請解析這張持股截圖…」），真正的資料在 `image_base64`。
-- `line_user_id`：僅供你做記憶/上下文；**你不需要、也不該用它去寫資料庫**。
-- `current_holdings`：使用者目前已存的持股，供你參考（例如判斷是新增還是更新、回覆時可對照）。可能是空陣列或不存在。
+- **`line_user_id`：⭐每一次呼叫都一定有（保證非空）。** 不論來自 LINE bot 或網頁 AI 助手，backend 都會在 payload 帶上它。這就是你呼叫**庫存 API**（見 `HOLDINGS_API.md`）時要帶的 `lineUserId`。
+- `current_holdings`：使用者目前已存的持股，供你參考。可能是空陣列或不存在（你也可以改用庫存 API 的 GET 取得最新）。
 - `image_base64` / `image_mime`：**只有截圖訊息才會有**。有這兩個欄位時，請對圖片做多模態解析，抽出每一筆持股。
+
+> **身份保證（回答「agent 一定收得到 lineUserId 嗎？」）：**
+> - **會，每次都有。** LINE bot：來自使用者的 LINE `source.userId`（群組/多人聊天無 userId 時 backend 直接擋掉、不會呼叫 agent）。網頁 AI 助手：使用者必須先 LINE 登入，用登入後的同一個 userId。
+> - 兩個入口拿到的是**同一個** LINE userId（因為 Login channel 與 Messaging API 在同一 Provider）。
+> - 位置：payload 的 `line_user_id` 欄位；另外 `runtimeSessionId` 也是 `stocknite-<userId>`，可交叉核對。
+> - **要讀/寫該使用者的庫存，就用這個 `line_user_id` 呼叫 `HOLDINGS_API.md` 的端點。**
 
 ---
 

@@ -87,7 +87,16 @@ a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:cent
 .card{background:#101d2e;padding:20px;border-radius:14px;margin-top:24px}
 .card h3{margin:0 0 10px;color:#7ee0b5}
 .btn{background:#7ee0b5;color:#07111f;border:0;padding:10px 18px;border-radius:999px;font-weight:700;cursor:pointer}
-.out{white-space:pre-wrap;line-height:1.7;margin-top:12px;color:#dbe4ee}
+.out{line-height:1.7;margin-top:12px;color:#dbe4ee}
+.out h1,.out h2,.out h3,.out h4,.msg h1,.msg h2,.msg h3,.msg h4{font-size:1.02em;margin:.6em 0 .3em;color:#7ee0b5}
+.out ul,.out ol,.msg ul,.msg ol{padding-left:1.2em;margin:.3em 0}
+.out li,.msg li{margin:.2em 0}
+.out p,.msg p{margin:.45em 0}
+.out strong,.msg strong{color:#f4f7fa}
+.out table,.msg table{border-collapse:collapse;font-size:12px;margin:.4em 0}
+.out th,.out td,.msg th,.msg td{border:1px solid #24374f;padding:4px 8px}
+.out code,.msg code{background:#0a1626;padding:1px 5px;border-radius:4px;font-size:.92em}
+.msg :first-child{margin-top:0}.msg :last-child{margin-bottom:0}
 .row{display:flex;gap:8px;margin-top:8px}
 .row input{flex:1;padding:10px;border-radius:10px;border:1px solid #24374f;background:#0a1626;color:#f4f7fa}
 .msg{margin:8px 0;padding:10px 12px;border-radius:10px;background:#0a1626}
@@ -146,11 +155,13 @@ ${rows}</table>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script>
+function mdSafe(t){ try{ return window.marked ? marked.parse(String(t)) : String(t); }catch(e){ return String(t); } }
 async function runAnalyze(){
   var btn=document.getElementById('analyzeBtn'), out=document.getElementById('analyzeOut');
-  btn.disabled=true; out.textContent='分析中…';
-  try{ var r=await fetch('/api/analyze',{method:'POST'}); var d=await r.json(); out.textContent=d.answer||d.error||'發生錯誤'; }
+  btn.disabled=true; out.innerHTML='<span class="typing"><i></i><i></i><i></i></span>';
+  try{ var r=await fetch('/api/analyze',{method:'POST'}); var d=await r.json(); out.innerHTML=mdSafe(d.answer||d.error||'發生錯誤'); }
   catch(e){ out.textContent='連線失敗，請稍後再試。'; }
   finally{ btn.disabled=false; }
 }
@@ -166,7 +177,7 @@ async function sendChat(){
   var c=document.getElementById('chat'); var pending=document.createElement('div');
   pending.className='msg'; pending.innerHTML='<span class="typing"><i></i><i></i><i></i></span>';
   c.appendChild(pending); c.scrollTop=c.scrollHeight;
-  try{ var r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); var d=await r.json(); pending.textContent=d.answer||d.error||'發生錯誤'; }
+  try{ var r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); var d=await r.json(); pending.innerHTML=mdSafe(d.answer||d.error||'發生錯誤'); }
   catch(e){ pending.textContent='連線失敗，請稍後再試。'; }
   c.scrollTop=c.scrollHeight;
 }
