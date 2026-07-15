@@ -151,61 +151,75 @@ ARTIFACT_URL="$(aws s3 presign "$S3_URI" \
   --region "$AWS_REGION" \
   --expires-in "$PRESIGN_TTL_SECONDS")"
 
-# The URL is short-lived and only stored inside the SSM command payload.
-REMOTE_COMMAND="$(cat <<EOF
+# Keep the remote shell body literal; inject dynamic values as POSIX-safe assignments.
+shell_quote() {
+  python3 -c 'import shlex, sys; print(shlex.quote(sys.argv[1]))' "$1"
+}
+REMOTE_BODY="$(cat <<'REMOTE_EOF'
 set -eu
-WORK_DIR=\$(mktemp -d /tmp/stocknite-deploy.XXXXXX)
-PREVIOUS_RELEASE=\$(readlink -f /opt/stocknite/current 2>/dev/null || true)
+WORK_DIR=$(mktemp -d /tmp/stocknite-deploy.XXXXXX)
+PREVIOUS_RELEASE=$(readlink -f /opt/stocknite/current 2>/dev/null || true)
 ENV_PATH=/etc/stocknite/stocknite.env
 UNIT_PATH=/etc/systemd/system/stocknite.service
 ENV_EXISTED=false
 UNIT_EXISTED=false
-if [ -f \"\$ENV_PATH\" ]; then cp -p \"\$ENV_PATH\" \"\$WORK_DIR/stocknite.env\"; ENV_EXISTED=true; fi
-if [ -f \"\$UNIT_PATH\" ]; then cp -p \"\$UNIT_PATH\" \"\$WORK_DIR/stocknite.service\"; UNIT_EXISTED=true; fi
+if [ -f "$ENV_PATH" ]; then cp -p "$ENV_PATH" "$WORK_DIR/stocknite.env"; ENV_EXISTED=true; fi
+if [ -f "$UNIT_PATH" ]; then cp -p "$UNIT_PATH" "$WORK_DIR/stocknite.service"; UNIT_EXISTED=true; fi
 finish() {
-  status=\$?
+  status=$?
   trap - EXIT INT TERM
-  if [ \"\$status\" -ne 0 ]; then
+  if [ "$status" -ne 0 ]; then
     set +e
-    failed_release=\$(readlink -f /opt/stocknite/current 2>/dev/null || true)
-    echo \"deployment failed; restoring previous application state\" >&2
-    if [ -n \"\$PREVIOUS_RELEASE\" ] && [ -d \"\$PREVIOUS_RELEASE\" ]; then
-      ln -sfn \"\$PREVIOUS_RELEASE\" /opt/stocknite/current
+    failed_release=$(readlink -f /opt/stocknite/current 2>/dev/null || true)
+    echo "deployment failed; restoring previous application state" >&2
+    if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
+      ln -sfn "$PREVIOUS_RELEASE" /opt/stocknite/current
     fi
-    if [ \"\$ENV_EXISTED\" = true ]; then cp -p \"\$WORK_DIR/stocknite.env\" \"\$ENV_PATH\"; else rm -f \"\$ENV_PATH\"; fi
-    if [ \"\$UNIT_EXISTED\" = true ]; then cp -p \"\$WORK_DIR/stocknite.service\" \"\$UNIT_PATH\"; else rm -f \"\$UNIT_PATH\"; fi
+    if [ "$ENV_EXISTED" = true ]; then cp -p "$WORK_DIR/stocknite.env" "$ENV_PATH"; else rm -f "$ENV_PATH"; fi
+    if [ "$UNIT_EXISTED" = true ]; then cp -p "$WORK_DIR/stocknite.service" "$UNIT_PATH"; else rm -f "$UNIT_PATH"; fi
     systemctl daemon-reload
     rollback_ok=true
     systemctl restart stocknite.service || rollback_ok=false
     curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null || rollback_ok=false
-    if [ \"\$rollback_ok\" != true ]; then echo \"critical: rollback health check failed\" >&2; fi
-    case \"\$failed_release\" in
-      /opt/stocknite/releases/*) if [ \"\$failed_release\" != \"\$PREVIOUS_RELEASE\" ]; then rm -rf \"\$failed_release\"; fi ;;
-    esac
+    if [ "$rollback_ok" != true ]; then echo "critical: rollback health check failed" >&2; fi
+    if [ "${failed_release#/opt/stocknite/releases/}" != "$failed_release" ] && [ "$failed_release" != "$PREVIOUS_RELEASE" ]; then
+      rm -rf "$failed_release"
+    fi
   fi
-  rm -rf \"\$WORK_DIR\"
-  exit \"\$status\"
+  rm -rf "$WORK_DIR"
+  exit "$status"
 }
 trap finish EXIT INT TERM
-curl --fail --silent --show-error --location '$ARTIFACT_URL' --output \"\$WORK_DIR/release.tgz\"
-echo '$ARTIFACT_SHA256  '"\$WORK_DIR/release.tgz" | sha256sum --check --status
-mkdir \"\$WORK_DIR/source\"
-tar -xzf \"\$WORK_DIR/release.tgz\" -C \"\$WORK_DIR/source\"
-manifest=\$(cat \"\$WORK_DIR/source/DEPLOY_COMMIT\")
-if [ \"\$manifest\" != '$COMMIT' ]; then echo \"commit manifest mismatch: \$manifest\" >&2; exit 1; fi
-AWS_REGION='$AWS_REGION' bash \"\$WORK_DIR/source/scripts/deploy-ec2.sh\" \"\$WORK_DIR/source\"
-privileges=\$(runuser -u postgres -- psql --dbname stocknite --tuples-only --no-align --command \"SELECT has_table_privilege('stocknite_app','app_data.credit_ledger','SELECT'), has_table_privilege('stocknite_app','app_data.credit_ledger','INSERT'), has_table_privilege('stocknite_app','app_data.credit_ledger','UPDATE'), has_table_privilege('stocknite_app','app_data.credit_ledger','DELETE'), has_table_privilege('stocknite_app','app_data.credit_ledger','TRUNCATE'), has_schema_privilege('stocknite_app','app_data','USAGE'), has_sequence_privilege('stocknite_app','app_data.credit_ledger_id_seq','USAGE'), has_sequence_privilege('stocknite_app','app_data.credit_ledger_id_seq','SELECT');\")
-if [ \"\$privileges\" != 't|t|f|f|f|t|t|t' ]; then
-  echo \"unexpected credit ledger privileges: \$privileges\" >&2
+curl --fail --silent --show-error --location "$ARTIFACT_URL" --output "$WORK_DIR/release.tgz"
+echo "$ARTIFACT_SHA256  $WORK_DIR/release.tgz" | sha256sum --check --status
+mkdir "$WORK_DIR/source"
+tar -xzf "$WORK_DIR/release.tgz" -C "$WORK_DIR/source"
+manifest=$(cat "$WORK_DIR/source/DEPLOY_COMMIT")
+if [ "$manifest" != "$EXPECTED_COMMIT" ]; then echo "commit manifest mismatch: $manifest" >&2; exit 1; fi
+AWS_REGION="$TARGET_AWS_REGION" bash "$WORK_DIR/source/scripts/deploy-ec2.sh" "$WORK_DIR/source"
+privileges=$(runuser -u postgres -- psql --dbname stocknite --tuples-only --no-align --command "SELECT has_table_privilege('stocknite_app','app_data.credit_ledger','SELECT'), has_table_privilege('stocknite_app','app_data.credit_ledger','INSERT'), has_table_privilege('stocknite_app','app_data.credit_ledger','UPDATE'), has_table_privilege('stocknite_app','app_data.credit_ledger','DELETE'), has_table_privilege('stocknite_app','app_data.credit_ledger','TRUNCATE'), has_schema_privilege('stocknite_app','app_data','USAGE'), has_sequence_privilege('stocknite_app','app_data.credit_ledger_id_seq','USAGE'), has_sequence_privilege('stocknite_app','app_data.credit_ledger_id_seq','SELECT');")
+if [ "$privileges" != 't|t|f|f|f|t|t|t' ]; then
+  echo "unexpected credit ledger privileges: $privileges" >&2
   exit 1
 fi
-current_manifest=\$(cat /opt/stocknite/current/DEPLOY_COMMIT)
-if [ \"\$current_manifest\" != '$COMMIT' ]; then echo \"active release manifest mismatch: \$current_manifest\" >&2; exit 1; fi
-curl --fail --silent --show-error '$HEALTH_URL' >/dev/null
-echo deployed_commit='$COMMIT'
-echo credit_ledger_privileges=\$privileges
-EOF
+current_manifest=$(cat /opt/stocknite/current/DEPLOY_COMMIT)
+if [ "$current_manifest" != "$EXPECTED_COMMIT" ]; then echo "active release manifest mismatch: $current_manifest" >&2; exit 1; fi
+curl --fail --silent --show-error "$PUBLIC_HEALTH_URL" >/dev/null
+echo "deployed_commit=$EXPECTED_COMMIT"
+echo "credit_ledger_privileges=$privileges"
+REMOTE_EOF
 )"
+REMOTE_COMMAND="ARTIFACT_URL=$(shell_quote "$ARTIFACT_URL")
+ARTIFACT_SHA256=$(shell_quote "$ARTIFACT_SHA256")
+EXPECTED_COMMIT=$(shell_quote "$COMMIT")
+TARGET_AWS_REGION=$(shell_quote "$AWS_REGION")
+PUBLIC_HEALTH_URL=$(shell_quote "$HEALTH_URL")
+$REMOTE_BODY"
+
+if ! printf '%s\n' "$REMOTE_COMMAND" | /bin/sh -n; then
+  echo "generated remote deployment payload is not valid POSIX shell" >&2
+  exit 1
+fi
 
 printf '%s' "$REMOTE_COMMAND" | python3 -c '
 import json
