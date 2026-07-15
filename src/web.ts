@@ -33,15 +33,42 @@ function fmt(v: unknown, digits = 0): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: digits });
 }
 
+function ymd(v: unknown): string {
+  if (!v) return "—";
+  const d = v instanceof Date ? v : new Date(String(v));
+  return Number.isNaN(d.getTime()) ? String(v).slice(0, 10) : d.toISOString().slice(0, 10);
+}
+
+function pnlOf(h: HoldingRow): { amount: number; pct: number } | null {
+  const cost = Number(h.average_cost);
+  const qty = Number(h.quantity);
+  const mv = Number(h.market_value);
+  if (!Number.isFinite(cost) || cost <= 0 || !Number.isFinite(qty) || !Number.isFinite(mv)) return null;
+  const basis = cost * qty;
+  return { amount: mv - basis, pct: basis ? ((mv - basis) / basis) * 100 : 0 };
+}
+
+function pnlCell(pl: { amount: number; pct: number } | null): string {
+  if (!pl) return `<td class="num">—</td>`;
+  const cls = pl.amount >= 0 ? "up" : "down";
+  const sign = pl.amount >= 0 ? "+" : "";
+  return `<td class="num ${cls}">${sign}${fmt(pl.amount)}<br><small>${sign}${pl.pct.toFixed(1)}%</small></td>`;
+}
+
 export function portfolioPage(holdings: HoldingRow[], displayName?: string): string {
   const total = holdings.reduce((s, h) => s + (Number(h.market_value) || 0), 0);
+  const totalBasis = holdings.reduce(
+    (s, h) => s + (pnlOf(h) ? Number(h.average_cost) * Number(h.quantity) : 0), 0);
+  const totalPl = totalBasis ? total - totalBasis : null;
+  const totalPct = totalPl !== null && totalBasis ? (totalPl / totalBasis) * 100 : 0;
   const rows = holdings.map((h) => `<tr>
     <td>${h.stock_name ?? ""}<small> ${h.stock_code}</small></td>
     <td class="num">${fmt(h.quantity)}</td>
     <td class="num">${fmt(h.average_cost, 2)}</td>
-    <td class="num">${h.purchase_date ? String(h.purchase_date).slice(0, 10) : "—"}</td>
+    <td class="num">${ymd(h.purchase_date)}</td>
     <td class="num">${fmt(h.close_price, 2)}</td>
     <td class="num">${fmt(h.market_value)}</td>
+    ${pnlCell(pnlOf(h))}
     <td class="num">${h.weight ? (Number(h.weight) * 100).toFixed(1) + "%" : "—"}</td>
   </tr>`).join("");
   const empty = `<p>你還沒有持股。到 LINE 傳一張持股截圖或輸入「今天買了台積電50股 成本2400 買進日2025-12-30」即可匯入。</p>`;
@@ -54,14 +81,19 @@ h1{color:#7ee0b5;margin:.2em 0}small{color:#8894a3}
 table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
 th,td{padding:10px 8px;border-bottom:1px solid #1c2b3f;text-align:left}
 th{color:#a8b3c2;font-weight:600}.num{text-align:right}
+.up{color:#ff6b6b}.down{color:#51cf66}
 .total{margin-top:16px;font-size:18px}.total b{color:#7ee0b5}
 a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:center}
 </style></head><body><main class="wrap">
 <div class="top"><h1>我的持股</h1><a href="/auth/logout">登出</a></div>
 <small>${displayName ? displayName + "，" : ""}資料截至 2025-12-31（示範）。分析不構成投資建議。</small>
 ${holdings.length ? `<table>
-<tr><th>股票</th><th class="num">股數</th><th class="num">成本</th><th class="num">買進日</th><th class="num">收盤</th><th class="num">市值</th><th class="num">佔比</th></tr>
+<tr><th>股票</th><th class="num">股數</th><th class="num">成本</th><th class="num">買進日</th><th class="num">收盤</th><th class="num">市值</th><th class="num">損益</th><th class="num">佔比</th></tr>
 ${rows}</table>
-<p class="total">總市值：<b>${fmt(total)}</b> 元</p>` : empty}
+<p class="total">總市值：<b>${fmt(total)}</b> 元${
+  totalPl !== null
+    ? `　總損益：<b class="${totalPl >= 0 ? "up" : "down"}">${totalPl >= 0 ? "+" : ""}${fmt(totalPl)}（${totalPl >= 0 ? "+" : ""}${totalPct.toFixed(1)}%）</b>`
+    : ""
+}</p>` : empty}
 </main></body></html>`;
 }
