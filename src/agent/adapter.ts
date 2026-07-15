@@ -78,12 +78,16 @@ const agentCore = new BedrockAgentCoreClient({ region: config.awsRegion });
 export async function invokeAgentRuntime(
   request: AgentRequest,
 ): Promise<AgentResponse> {
-  const evidence = request.evidence as { holdings?: unknown } | undefined;
+  const evidence = request.evidence as {
+    holdings?: unknown;
+    market?: unknown;
+  } | undefined;
   const payload: Record<string, unknown> = {
     prompt: request.message,
     line_user_id: request.userId,
   };
   if (evidence?.holdings) payload.current_holdings = evidence.holdings;
+  if (evidence?.market) payload.market_snapshot = evidence.market;
   if (request.imageBase64) {
     payload.image_base64 = request.imageBase64;
     payload.image_mime = request.imageMime ?? "image/jpeg";

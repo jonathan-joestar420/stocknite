@@ -1,4 +1,5 @@
 import { invokeAgentCore } from "../agent/adapter.js";
+import { conversationService } from "../services/conversation.js";
 import { getMarketSentiment, getStockSummary } from "../services/market.js";
 import { listHoldings, removeHolding, upsertHolding } from "../services/portfolio.js";
 import { getLineMessageContent, replyLine } from "./client.js";
@@ -150,26 +151,14 @@ async function resolveAction(event: LineEvent): Promise<string> {
   if (action === "settings" || text === "設定") {
     return "設定功能：晨報時間 07:00（開發中）\n可輸入「我的持股」查看資料。";
   }
-  const holding = text.match(/^新增持股\s+([0-9A-Za-z]{2,10})\s+([0-9.]+)$/);
-  if (holding) {
-    const data = await upsertHolding(userId, holding[1]!, Number(holding[2])) as Array<Record<string, unknown>>;
-    return `已儲存 ✅\n${formatHoldings(data)}`;
-  }
   const stockCode = text.match(/^\d{4,6}$/)?.[0];
   if (stockCode) {
     const data = await getStockSummary(stockCode);
     return data ? `${stockCode} 股票摘要：\n${asText(data)}\n資料截至 2025-12-31。` :
       `找不到股票 ${stockCode}。`;
   }
-  const holdings = await listHoldings(userId).catch(() => []);
-  const agent = await invokeAgentCore({
-    userId,
-    message: text,
-    evidence: holdings.length ? { holdings } : undefined,
-  });
-  // 若 agent 回傳結構化持股 intent，則寫入/刪除 DB；否則當一般聊天回覆。
-  const holdingReply = await handleHoldingIntent(userId, agent.data, agent.answer);
-  return holdingReply ?? agent.answer;
+  const result = await conversationService.handle({ userId, message: text });
+  return result.answer;
 }
 
 export async function handleLineEvent(event: LineEvent): Promise<void> {

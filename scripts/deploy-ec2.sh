@@ -56,11 +56,14 @@ aws secretsmanager get-secret-value \
 install -o root -g stocknite -m 640 "$TEMP_ENV" "$CONFIG_DIR/stocknite.env"
 rm -f "$TEMP_ENV"
 
-log "applying database migration"
-runuser -u postgres -- psql \
-  --dbname stocknite \
-  --set ON_ERROR_STOP=1 \
-  --file "$RELEASE_DIR/sql/001_app_data.sql"
+log "applying database migrations"
+for migration in "$RELEASE_DIR"/sql/*.sql; do
+  log "applying $(basename "$migration")"
+  runuser -u postgres -- psql \
+    --dbname stocknite \
+    --set ON_ERROR_STOP=1 \
+    --file "$migration"
+done
 
 log "activating release"
 ln -sfn "$RELEASE_DIR" "$APP_ROOT/current"

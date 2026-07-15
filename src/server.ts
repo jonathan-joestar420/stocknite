@@ -1,8 +1,10 @@
 import Fastify, { type FastifyRequest } from "fastify";
-import { invokeAgentCore, invokeBedrock } from "./agent/adapter.js";
+import { invokeAgentCore } from "./agent/adapter.js";
 import { config } from "./config.js";
 import { databaseHealth, pool } from "./db.js";
+import { registerFeatureRoutes } from "./http/features.js";
 import { handleLineEvents } from "./line/handler.js";
+import { conversationService } from "./services/conversation.js";
 import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
@@ -88,23 +90,17 @@ app.get("/me", async (request, reply) => {
   return reply.type("text/html").send(portfolioPage(holdings));
 });
 
-// 單次 AI 分析（Bedrock）：限登入者，分析本人整體持股。
+// 單次 AI 持股分析：限登入者；由 conversation service 載入本人持股後送 AgentCore。
 app.post("/api/analyze", async (request, reply) => {
   const userId = sessionUser(request);
   if (!userId) return reply.code(401).send({ error: "login_required" });
-  const holdings = await listHoldings(userId) as Array<{ stock_code: string }>;
-  if (!holdings.length) return { answer: "你目前沒有持股，先用 LINE 匯入後再來分析吧。" };
-  const details: unknown[] = [];
-  for (const h of holdings) {
-    const s = await getStockSummary(h.stock_code);
-    if (s) details.push(s);
-  }
-  const res = await invokeBedrock({
-    userId,
-    message: "請針對「我的整體持股組合」做一次體檢，涵蓋：投資風格、資產配置、集中風險、投資習慣、常見錯誤、決策焦慮。用重點條列、精簡白話。",
-    evidence: { holdings, details },
-  });
-  return { answer: res.answer };
+  const result = await conversationService.handle({ userId, message: "分析持股" });
+  return {
+    mode: result.mode,
+    intent: result.intent,
+    answer: result.answer,
+    credit: result.credit,
+  };
 });
 
 // 持股儀表板資料（限登入者）：每檔持股的價格走勢、社群情緒走勢與白話解讀。
@@ -114,15 +110,8 @@ app.get("/api/dashboard", async (request, reply) => {
   return buildDashboard(userId);
 });
 
-// AI 助手（AgentCore）：限登入者，用本人 lineUserId（效果同 LINE bot）。
-app.post<{ Body: { message?: string } }>("/api/assistant", async (request, reply) => {
-  const userId = sessionUser(request);
-  if (!userId) return reply.code(401).send({ error: "login_required" });
-  const message = request.body?.message?.trim();
-  if (!message) return reply.code(400).send({ error: "missing_message" });
-  const res = await invokeAgentCore({ userId, message });
-  return { answer: res.answer };
-});
+// 固定意圖、AI assistant 與 credit APIs。
+registerFeatureRoutes(app, sessionUser);
 
 app.get<{ Params: { code: string } }>("/api/stocks/:code", async (request, reply) => {
   const data = await getStockSummary(request.params.code);
