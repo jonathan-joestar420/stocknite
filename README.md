@@ -2,6 +2,8 @@
 
 > 存好股，睡好覺。
 
+[更新日誌](CHANGELOG.md)
+
 EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計算由 PostgreSQL／程式處理；AI 分析可串接 Bedrock AgentCore Runtime 或既有 HTTP Agent endpoint。
 
 ## 目前 Hackathon 功能狀態
@@ -12,7 +14,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 - 登入後 `/me` 持股頁：市值、權重、成本、買進日期與未實現損益。
 - 持股儀表板：90 日價格、成本線、60 日社群情緒與估值位置。
 - Hybrid 語意路由：明確指令由 deterministic router 處理；其他自然文字由 Claude Haiku 4.5 分類成白名單 intent，再交給後端或 AgentCore。
-- 使用者明確輸入「分析持股」或「分析近況」時，conversation service 才會組合持股／市場 evidence 並呼叫 AgentCore。
+- 明確分析指令或 semantic router 的高信心分析 intent，才會讓 conversation service 組合持股／市場 evidence 並呼叫 AgentCore。
 - LINE 文字／圖片輸入；圖片可交由 AgentCore 解析結構化持股。
 - Credit ledger：每日簽到、10／30／100 點 demo 儲值、AI 分析扣點與失敗退款；預設仍為無限使用模式。
 - 股票摘要、指定日期、歷史行情、論壇情緒、持股、意圖解析與 credit API。
@@ -60,7 +62,7 @@ EC2 單體式網站、持股儀表板與 LINE Bot API。市場資料與持股計
 - `GET /me`
 - `POST /api/analyze`：以登入者持股執行固定的「分析持股」流程
 - `GET /api/dashboard`：持股價格、情緒與估值儀表板
-- `POST /api/assistant`：登入者對話入口；只有明確分析 intent 會呼叫 AgentCore
+- `POST /api/assistant`：登入者對話入口；只有明確或高信心的分析 intent 會呼叫 AgentCore
 - `POST /api/intents/resolve`：只解析意圖，不呼叫 AgentCore
 - `GET /api/credits`：查詢 ledger 餘額、當日簽到與 enforcement 狀態
 - `POST /api/credits/check-in`：依 `Asia/Taipei` 日期每日簽到一次
