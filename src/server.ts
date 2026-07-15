@@ -7,7 +7,10 @@ import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
 import { listHoldings, removeHolding, upsertHolding } from "./services/portfolio.js";
-import { landingPage } from "./web.js";
+import {
+  authorizeUrl, exchangeCodeForUserId, newState, readCookie, signSession, verifySession,
+} from "./line/login.js";
+import { landingPage, portfolioPage } from "./web.js";
 
 type RawRequest = FastifyRequest & { rawBody?: Buffer };
 const app = Fastify({ logger: true });
@@ -35,6 +38,49 @@ app.get("/api/health", async () => ({
   agentCoreConfigured: Boolean(config.agentCoreArn || config.agentCoreEndpoint),
 }));
 app.get("/api/line/menu", async () => ({ buttons: lineMenu }));
+
+// ---- LINE Login（網頁登入看持股）----
+app.get("/auth/line/login", async (_, reply) => {
+  if (!config.lineLoginChannelId) {
+    return reply.code(503).type("text/plain").send("LINE 登入尚未設定（缺 LINE_LOGIN_CHANNEL_ID）。");
+  }
+  const state = newState();
+  reply.header("set-cookie",
+    `sn_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+  return reply.redirect(authorizeUrl(state));
+});
+
+app.get<{ Querystring: { code?: string; state?: string } }>(
+  "/auth/line/callback", async (request, reply) => {
+    const { code, state } = request.query;
+    const savedState = readCookie(request.headers.cookie, "sn_state");
+    if (!code || !state || !savedState || state !== savedState) {
+      return reply.code(400).type("text/plain").send("登入驗證失敗，請重新登入。");
+    }
+    try {
+      const profile = await exchangeCodeForUserId(code);
+      reply.header("set-cookie", [
+        "sn_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+        `sn_session=${signSession(profile.userId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=604800`,
+      ]);
+      return reply.redirect("/me");
+    } catch (error) {
+      request.log.error(error, "line login callback failed");
+      return reply.code(502).type("text/plain").send("LINE 登入失敗，請稍後再試。");
+    }
+  });
+
+app.get("/auth/logout", async (_, reply) => {
+  reply.header("set-cookie", "sn_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+  return reply.redirect("/");
+});
+
+app.get("/me", async (request, reply) => {
+  const userId = verifySession(readCookie(request.headers.cookie, "sn_session"));
+  if (!userId) return reply.redirect("/auth/line/login");
+  const holdings = await listHoldings(userId) as Parameters<typeof portfolioPage>[0];
+  return reply.type("text/html").send(portfolioPage(holdings));
+});
 
 app.get<{ Params: { code: string } }>("/api/stocks/:code", async (request, reply) => {
   const data = await getStockSummary(request.params.code);
