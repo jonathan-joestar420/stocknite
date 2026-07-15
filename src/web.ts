@@ -84,6 +84,14 @@ th{color:#a8b3c2;font-weight:600}.num{text-align:right}
 .up{color:#ff6b6b}.down{color:#51cf66}
 .total{margin-top:16px;font-size:18px}.total b{color:#7ee0b5}
 a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:center}
+.card{background:#101d2e;padding:20px;border-radius:14px;margin-top:24px}
+.card h3{margin:0 0 10px;color:#7ee0b5}
+.btn{background:#7ee0b5;color:#07111f;border:0;padding:10px 18px;border-radius:999px;font-weight:700;cursor:pointer}
+.out{white-space:pre-wrap;line-height:1.7;margin-top:12px;color:#dbe4ee}
+.row{display:flex;gap:8px;margin-top:8px}
+.row input{flex:1;padding:10px;border-radius:10px;border:1px solid #24374f;background:#0a1626;color:#f4f7fa}
+.msg{margin:8px 0;padding:10px 12px;border-radius:10px;background:#0a1626}
+.msg.me{background:#13324a}
 </style></head><body><main class="wrap">
 <div class="top"><h1>我的持股</h1><a href="/auth/logout">登出</a></div>
 <small>${displayName ? displayName + "，" : ""}資料截至 2025-12-31（示範）。分析不構成投資建議。</small>
@@ -95,5 +103,40 @@ ${rows}</table>
     ? `　總損益：<b class="${totalPl >= 0 ? "up" : "down"}">${totalPl >= 0 ? "+" : ""}${fmt(totalPl)}（${totalPl >= 0 ? "+" : ""}${totalPct.toFixed(1)}%）</b>`
     : ""
 }</p>` : empty}
+
+<section class="card">
+  <h3>AI 持股體檢</h3>
+  <small>用 AI 對你目前的整體持股做一次分析（六大面向）。</small>
+  <div><button class="btn" id="analyzeBtn" onclick="runAnalyze()">開始分析</button></div>
+  <div class="out" id="analyzeOut"></div>
+</section>
+
+<section class="card">
+  <h3>AI 投資助手</h3>
+  <small>問問題，助手會依你的持股與市場資料回覆（效果同 LINE 上的股奈）。</small>
+  <div id="chat"></div>
+  <div class="row">
+    <input id="chatInput" placeholder="例如：我的組合抗跌嗎？台積電最近如何？" onkeydown="if(event.key==='Enter')sendChat()"/>
+    <button class="btn" onclick="sendChat()">送出</button>
+  </div>
+</section>
+
+<script>
+async function runAnalyze(){
+  const btn=document.getElementById('analyzeBtn'), out=document.getElementById('analyzeOut');
+  btn.disabled=true; out.textContent='分析中…';
+  try{ const r=await fetch('/api/analyze',{method:'POST'}); const d=await r.json(); out.textContent=d.answer||d.error||'發生錯誤'; }
+  catch(e){ out.textContent='連線失敗，請稍後再試。'; }
+  finally{ btn.disabled=false; }
+}
+function addMsg(text,me){ const c=document.getElementById('chat'); const el=document.createElement('div'); el.className='msg'+(me?' me':''); el.textContent=text; c.appendChild(el); c.scrollTop=c.scrollHeight; }
+async function sendChat(){
+  const input=document.getElementById('chatInput'); const msg=input.value.trim(); if(!msg)return;
+  addMsg(msg,true); input.value=''; addMsg('思考中…',false);
+  const chat=document.getElementById('chat'); const pending=chat.lastChild;
+  try{ const r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); const d=await r.json(); pending.textContent=d.answer||d.error||'發生錯誤'; }
+  catch(e){ pending.textContent='連線失敗，請稍後再試。'; }
+}
+</script>
 </main></body></html>`;
 }
