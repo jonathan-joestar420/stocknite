@@ -25,6 +25,17 @@ export async function getStockHistory(stockCode: string, limit: number) {
     ORDER BY trade_date DESC LIMIT $2`, [stockCode, limit]);
 }
 
+export async function getSentimentHistory(stockCode: string, limit: number) {
+  return query(`
+    SELECT activity_date,
+      NULLIF(post_count, '')::bigint AS posts,
+      NULLIF(bullish_posts, '')::bigint AS bullish,
+      NULLIF(bearish_posts, '')::bigint AS bearish
+    FROM market_data.forum_posts_replies_daily_stats_2025
+    WHERE stock_code = $1
+    ORDER BY activity_date DESC LIMIT $2`, [stockCode, limit]);
+}
+
 export async function getMarketSentiment() {
   const rows = await query(`
     SELECT activity_date,

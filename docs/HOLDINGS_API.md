@@ -85,7 +85,7 @@ Content-Type: application/json
 | 欄位 | 規則 |
 |---|---|
 | `stockCode` | 台股代號 4–6 碼字串，且須在 **300 檔示範清單**（`market_data.stock_summary_2025`）內。|
-| `quantity` | 股數 > 0。使用者講「張」請 ×1000 後再送。|
+| `quantity` | 股數；新增時 > 0，更新時可設 0（表示全數賣出）。使用者講「張」請 ×1000 後再送。|
 | `averageCost` | 每股成本，>= 0，選填。給「總成本」請先 ÷ 股數。|
 | `purchaseDate` | `YYYY-MM-DD`，選填。**使用者沒提供就不要帶這個欄位、也不要猜**（可省略）。|
 

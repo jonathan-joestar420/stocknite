@@ -91,7 +91,18 @@ a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:cent
 .row{display:flex;gap:8px;margin-top:8px}
 .row input{flex:1;padding:10px;border-radius:10px;border:1px solid #24374f;background:#0a1626;color:#f4f7fa}
 .msg{margin:8px 0;padding:10px 12px;border-radius:10px;background:#0a1626}
-.msg.me{background:#13324a}
+.msg.me{background:#13324a;margin-left:24px}
+.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-top:12px}
+.dcard{background:#101d2e;border-radius:14px;padding:16px}
+.dcard h4{margin:0 0 8px;color:#f4f7fa}
+.dcard .ins{color:#a8b3c2;font-size:13px;line-height:1.7;margin-top:10px}
+canvas{max-width:100%}
+.fab{position:fixed;right:20px;bottom:20px;z-index:50;border:0;border-radius:999px;padding:14px 20px;background:#00c300;color:#fff;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.chatbox{position:fixed;right:20px;bottom:20px;z-index:51;width:min(380px,92vw);height:min(560px,80vh);background:#0c1a2b;border:1px solid #22374f;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.chatbox-head{padding:14px 16px;background:#13324a;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.chatbox-body{flex:1;overflow-y:auto;padding:12px}
+.chatbox-input{display:flex;gap:6px;padding:10px;border-top:1px solid #22374f}
+.chatbox-input input{flex:1;padding:10px;border-radius:10px;border:1px solid #24374f;background:#0a1626;color:#f4f7fa}
 </style></head><body><main class="wrap">
 <div class="top"><h1>我的持股</h1><a href="/auth/logout">登出</a></div>
 <small>${displayName ? displayName + "，" : ""}資料截至 2025-12-31（示範）。分析不構成投資建議。</small>
@@ -107,36 +118,71 @@ ${rows}</table>
 <section class="card">
   <h3>AI 持股體檢</h3>
   <small>用 AI 對你目前的整體持股做一次分析（六大面向）。</small>
-  <div><button class="btn" id="analyzeBtn" onclick="runAnalyze()">開始分析</button></div>
+  <div style="margin-top:8px"><button class="btn" id="analyzeBtn" onclick="runAnalyze()">開始分析</button></div>
   <div class="out" id="analyzeOut"></div>
 </section>
 
-<section class="card">
-  <h3>AI 投資助手</h3>
-  <small>問問題，助手會依你的持股與市場資料回覆（效果同 LINE 上的股奈）。</small>
-  <div id="chat"></div>
-  <div class="row">
-    <input id="chatInput" placeholder="例如：我的組合抗跌嗎？台積電最近如何？" onkeydown="if(event.key==='Enter')sendChat()"/>
-    <button class="btn" onclick="sendChat()">送出</button>
-  </div>
-</section>
+<h2 style="margin-top:28px;color:#7ee0b5">持股洞察儀表板</h2>
+<small>每檔持股的股價走勢（含你的成本線）與社群多空情緒趨勢。</small>
+<div id="dashboard" class="dash">載入中…</div>
 
+<button id="fab" class="fab" onclick="toggleChat()">💬 我的投資助手</button>
+<div id="chatbox" class="chatbox" style="display:none">
+  <div class="chatbox-head">🌙 投資助手 <span onclick="toggleChat()" style="cursor:pointer">✕</span></div>
+  <div id="chat" class="chatbox-body"></div>
+  <div class="chatbox-input">
+    <input id="chatInput" placeholder="問我你的持股，例如：我的組合抗跌嗎？" onkeydown="if(event.key==='Enter')sendChat()"/>
+    <button class="btn" onclick="sendChat()">送</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 <script>
 async function runAnalyze(){
-  const btn=document.getElementById('analyzeBtn'), out=document.getElementById('analyzeOut');
+  var btn=document.getElementById('analyzeBtn'), out=document.getElementById('analyzeOut');
   btn.disabled=true; out.textContent='分析中…';
-  try{ const r=await fetch('/api/analyze',{method:'POST'}); const d=await r.json(); out.textContent=d.answer||d.error||'發生錯誤'; }
+  try{ var r=await fetch('/api/analyze',{method:'POST'}); var d=await r.json(); out.textContent=d.answer||d.error||'發生錯誤'; }
   catch(e){ out.textContent='連線失敗，請稍後再試。'; }
   finally{ btn.disabled=false; }
 }
-function addMsg(text,me){ const c=document.getElementById('chat'); const el=document.createElement('div'); el.className='msg'+(me?' me':''); el.textContent=text; c.appendChild(el); c.scrollTop=c.scrollHeight; }
+function toggleChat(){
+  var b=document.getElementById('chatbox'), f=document.getElementById('fab');
+  var open=b.style.display==='none'; b.style.display=open?'flex':'none'; f.style.display=open?'none':'block';
+  if(open && !document.getElementById('chat').childElementCount){ addMsg('嗨，我是你的投資助手 🌙 問我任何關於你持股的問題吧。',false); }
+}
+function addMsg(text,me){ var c=document.getElementById('chat'); var el=document.createElement('div'); el.className='msg'+(me?' me':''); el.textContent=text; c.appendChild(el); c.scrollTop=c.scrollHeight; return el; }
 async function sendChat(){
-  const input=document.getElementById('chatInput'); const msg=input.value.trim(); if(!msg)return;
-  addMsg(msg,true); input.value=''; addMsg('思考中…',false);
-  const chat=document.getElementById('chat'); const pending=chat.lastChild;
-  try{ const r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); const d=await r.json(); pending.textContent=d.answer||d.error||'發生錯誤'; }
+  var input=document.getElementById('chatInput'); var msg=input.value.trim(); if(!msg)return;
+  addMsg(msg,true); input.value=''; var pending=addMsg('思考中…',false);
+  try{ var r=await fetch('/api/assistant',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message:msg})}); var d=await r.json(); pending.textContent=d.answer||d.error||'發生錯誤'; }
   catch(e){ pending.textContent='連線失敗，請稍後再試。'; }
 }
+function renderCard(parent,c){
+  var div=document.createElement('div'); div.className='dcard';
+  var title=document.createElement('h4'); title.textContent=(c.stock_name||'')+' '+c.stock_code; div.appendChild(title);
+  var pc=document.createElement('canvas'); var sc=document.createElement('canvas');
+  div.appendChild(pc); div.appendChild(sc);
+  var ins=document.createElement('div'); ins.className='ins'; ins.textContent=c.insight; div.appendChild(ins);
+  parent.appendChild(div);
+  var labels=c.priceHistory.map(function(x){return x.d;});
+  var ds=[{label:'股價',data:c.priceHistory.map(function(x){return x.c;}),borderColor:'#7ee0b5',pointRadius:0,tension:.2}];
+  if(c.average_cost){ ds.push({label:'你的成本',data:c.priceHistory.map(function(){return c.average_cost;}),borderColor:'#ff6b6b',borderDash:[6,4],pointRadius:0}); }
+  new Chart(pc,{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,plugins:{legend:{labels:{color:'#a8b3c2',boxWidth:12}}},scales:{x:{display:false},y:{ticks:{color:'#8894a3'}}}}});
+  new Chart(sc,{type:'line',data:{labels:c.sentimentHistory.map(function(x){return x.d;}),datasets:[
+    {label:'看多',data:c.sentimentHistory.map(function(x){return x.bull;}),borderColor:'#ff6b6b',pointRadius:0,tension:.2},
+    {label:'看空',data:c.sentimentHistory.map(function(x){return x.bear;}),borderColor:'#51cf66',pointRadius:0,tension:.2}
+  ]},options:{responsive:true,plugins:{legend:{labels:{color:'#a8b3c2',boxWidth:12}}},scales:{x:{display:false},y:{ticks:{color:'#8894a3'}}}}});
+}
+async function loadDashboard(){
+  var el=document.getElementById('dashboard');
+  try{
+    var r=await fetch('/api/dashboard'); var d=await r.json();
+    if(!d.cards||!d.cards.length){ el.textContent='沒有持股資料，先用 LINE 匯入吧。'; return; }
+    el.innerHTML='';
+    d.cards.forEach(function(c){ renderCard(el,c); });
+  }catch(e){ el.textContent='儀表板載入失敗。'; }
+}
+loadDashboard();
 </script>
 </main></body></html>`;
 }
