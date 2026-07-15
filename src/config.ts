@@ -19,6 +19,7 @@ export const config = {
   agentCoreQualifier: optional("AGENTCORE_QUALIFIER") ?? "DEFAULT",
   lineLoginChannelId: optional("LINE_LOGIN_CHANNEL_ID"),
   lineLoginChannelSecret: optional("LINE_LOGIN_CHANNEL_SECRET"),
+  agentApiKey: optional("AGENT_API_KEY"),
   awsRegion: optional("AWS_REGION") ?? optional("AWS_DEFAULT_REGION") ?? "us-west-2",
   bedrockModelId:
     optional("BEDROCK_MODEL_ID") ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0",
