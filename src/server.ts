@@ -123,6 +123,48 @@ app.delete<{ Params: { code: string } }>(
     if (!id) return reply.code(401).send({ error: "missing_line_user" });
     return removeHolding(id, request.params.code);
   });
+// ---- Agent-facing 庫存 API（供 AgentCore agent 以 HTTP 調用）----
+// 認證：header `x-agent-key` 必須等於 AGENT_API_KEY；使用者以 body/query 的 lineUserId 指定。
+function agentAuthed(request: FastifyRequest): boolean {
+  const key = request.headers["x-agent-key"];
+  const value = Array.isArray(key) ? key[0] : key;
+  return Boolean(config.agentApiKey) && value === config.agentApiKey;
+}
+
+app.get<{ Querystring: { lineUserId?: string } }>(
+  "/api/agent/holdings", async (request, reply) => {
+    if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
+    const lineUserId = request.query.lineUserId;
+    if (!lineUserId) return reply.code(400).send({ error: "missing_lineUserId" });
+    return listHoldings(lineUserId);
+  });
+
+app.post<{ Body: {
+  lineUserId?: string; stockCode?: string; quantity?: number;
+  averageCost?: number; purchaseDate?: string;
+} }>("/api/agent/holdings", async (request, reply) => {
+  if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
+  const { lineUserId, stockCode, quantity, averageCost, purchaseDate } = request.body;
+  if (!lineUserId || !stockCode || !quantity || quantity <= 0) {
+    return reply.code(400).send({ error: "invalid_holding", need: ["lineUserId", "stockCode", "quantity>0"] });
+  }
+  const summary = await getStockSummary(stockCode);
+  if (!summary) return reply.code(400).send({ error: "unsupported_stock", stockCode });
+  const holdings = await upsertHolding(lineUserId, stockCode, quantity, averageCost, purchaseDate);
+  return { ok: true, holdings };
+});
+
+app.delete<{ Body: { lineUserId?: string; stockCode?: string } }>(
+  "/api/agent/holdings", async (request, reply) => {
+    if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
+    const { lineUserId, stockCode } = request.body ?? {};
+    if (!lineUserId || !stockCode) {
+      return reply.code(400).send({ error: "invalid_request", need: ["lineUserId", "stockCode"] });
+    }
+    const holdings = await removeHolding(lineUserId, stockCode);
+    return { ok: true, holdings };
+  });
+
 app.post<{ Body: { message?: string; evidence?: unknown } }>(
   "/api/agent/analyze", async (request, reply) => {
     const id = userId(request);
