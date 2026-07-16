@@ -31,7 +31,7 @@
 
 - `prompt`：使用者文字。若 backend 已載入持股或市場資料，會在 prompt 後附上 `[BACKEND_VERIFIED_EVIDENCE_JSON]`；這份資料是本次分析的 authoritative evidence，不得回覆「缺少身份／無法查詢持股」。純截圖訊息時，真正的圖片在 `image_base64`。
 - **`line_user_id`：⭐每一次呼叫都一定有（保證非空）。** 不論來自 LINE bot 或網頁 AI 助手，backend 都會在 payload 帶上它。這就是你呼叫**庫存 API**（見 `HOLDINGS_API.md`）時要帶的 `lineUserId`。
-- `current_holdings`：使用者目前已存的持股，供你參考。可能是空陣列或不存在（你也可以改用庫存 API 的 GET 取得最新）。
+- `current_holdings`：使用者**目前持有中**的持股（已賣出／`quantity=0` 的過去持有不會放進來），供你參考。可能是空陣列或不存在（你也可以改用庫存 API 的 GET 取得最新；GET 會連同已賣出一起回，用 `quantity`/`sold_quantity` 判斷）。
 - `image_base64` / `image_mime`：**只有截圖訊息才會有**。有這兩個欄位時，請對圖片做多模態解析，抽出每一筆持股。
 
 > **身份保證（回答「agent 一定收得到 lineUserId 嗎？」）：**
@@ -65,12 +65,14 @@
 }
 ```
 
-### 2.2 `remove_holding`（刪除某一檔持股）
-使用者說「幫我移除 / 刪掉 / 我賣光了 X」。
+### 2.2 `remove_holding`（標記賣出某一檔持股）
+使用者說「幫我移除 / 我賣光了 X」。
 
 ```json
-{ "intent": "remove_holding", "stock_code": "2330", "reply": "已幫你把台積電移除 ✅" }
+{ "intent": "remove_holding", "stock_code": "2330", "reply": "已幫你把台積電標記賣出 ✅（可到網站補賣出價與日期算已實現損益）" }
 ```
+
+> ⚠️ **這是「標記賣出」而非實體刪除**：backend 會把該檔設為 `quantity=0`、保留為「過去持有」（賣出股數自動保存），不會從資料庫刪掉。賣出價／日期由使用者事後於網站補。
 
 ### 2.3 `chat`（一般問答／洞察，不涉及新增或刪除）
 使用者只是問問題、聊天、想了解某檔或自己的組合。
@@ -109,7 +111,7 @@
 
 ### 4.1 判斷 intent
 - 出現「買了 / 持有 / 我有 / 幫我記 / 加入 / 匯入 / （上傳截圖）」→ `upsert_holding`
-- 出現「賣光 / 移除 / 刪掉 / 清掉」某檔 → `remove_holding`
+- 出現「賣光 / 賣掉 / 出清 / 移除」某檔 → `remove_holding`（會被標記為賣出、保留為過去持有）
 - 其他（詢問、閒聊、要洞察）→ `chat`
 
 ### 4.2 文字解析

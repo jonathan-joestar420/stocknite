@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { conversationService } from "../services/conversation.js";
+import { invokeAgentCore } from "../agent/adapter.js";
 import { creditService } from "../services/credits.js";
+import { listActiveHoldings } from "../services/portfolio.js";
 
 function requireUser(
   request: FastifyRequest,
@@ -16,27 +17,19 @@ export function registerFeatureRoutes(
   app: FastifyInstance,
   sessionUser: (request: FastifyRequest) => string | undefined,
 ): void {
-  // 只解析意圖；可呼叫 bounded classifier，但不會呼叫 AgentCore 分析。
-  app.post<{ Body: { message?: string } }>("/api/intents/resolve", async (request, reply) => {
-    const userId = requireUser(request, reply, sessionUser);
-    if (!userId) return reply;
-    const message = request.body?.message?.trim();
-    if (!message) return reply.code(400).send({ error: "missing_message" });
-    return conversationService.inspect(message);
-  });
-
+  // 不做本地意圖路由：官網 AI 助手的所有訊息一律直接交給 AgentCore agent 處理。
   app.post<{ Body: { message?: string } }>("/api/assistant", async (request, reply) => {
     const userId = requireUser(request, reply, sessionUser);
     if (!userId) return reply;
     const message = request.body?.message?.trim();
     if (!message) return reply.code(400).send({ error: "missing_message" });
-    const result = await conversationService.handle({ userId, message });
-    return {
-      mode: result.mode,
-      intent: result.intent,
-      answer: result.answer,
-      credit: result.credit,
-    };
+    const holdings = await listActiveHoldings(userId).catch(() => []);
+    const agent = await invokeAgentCore({
+      userId,
+      message,
+      evidence: holdings.length ? { holdings } : undefined,
+    });
+    return { mode: agent.mode, intent: "chat", answer: agent.answer };
   });
 
   app.get("/api/credits", async (request, reply) => {

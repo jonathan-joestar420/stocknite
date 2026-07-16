@@ -4,12 +4,28 @@ export async function getStockSummary(stockCode: string) {
   const rows = await query(`
     SELECT stock_code, stock_name, market, industry,
       NULLIF(close_price, '')::numeric AS close_price,
+      NULLIF(market_cap_billion, '')::numeric AS market_cap_billion,
+      NULLIF(market_cap_weight_pct, '')::numeric AS market_cap_weight_pct,
+      NULLIF(pe_ratio_ttm, '')::numeric AS pe_ratio_ttm,
+      NULLIF(price_to_book, '')::numeric AS price_to_book,
+      NULLIF(turnover_rate_pct, '')::numeric AS turnover_rate_pct,
       NULLIF(quarterly_return_pct, '')::numeric AS quarterly_return_pct,
       NULLIF(annual_return_pct, '')::numeric AS annual_return_pct,
+      NULLIF(relative_annual_return_pct, '')::numeric AS relative_annual_return_pct,
+      NULLIF(dividend_yield_pct, '')::numeric AS dividend_yield_pct,
+      NULLIF(institutional_net_buy_sell_20d, '')::numeric AS institutional_net_buy_sell_20d,
       NULLIF(foreign_holding_pct, '')::numeric AS foreign_holding_pct,
       NULLIF(institutional_holding_pct, '')::numeric AS institutional_holding_pct,
+      NULLIF(consecutive_dividend_years, '')::numeric AS consecutive_dividend_years,
+      NULLIF(latest_cash_dividend, '')::numeric AS latest_cash_dividend,
+      NULLIF(payout_ratio_pct, '')::numeric AS payout_ratio_pct,
+      NULLIF(latest_ex_dividend_date, '') AS latest_ex_dividend_date,
       NULLIF(year_high, '')::numeric AS year_high,
-      NULLIF(year_low, '')::numeric AS year_low
+      NULLIF(year_low, '')::numeric AS year_low,
+      NULLIF(ytd_return_pct, '')::numeric AS ytd_return_pct,
+      NULLIF(deviation_year_ma_pct, '')::numeric AS deviation_year_ma_pct,
+      NULLIF(buy_point_percentile_pct, '')::numeric AS buy_point_percentile_pct,
+      NULLIF(all_time_high_flag, '') AS all_time_high_flag
     FROM market_data.stock_summary_2025
     WHERE stock_code = $1 LIMIT 1`, [stockCode]);
   return rows[0] ?? null;

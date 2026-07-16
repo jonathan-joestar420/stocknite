@@ -4,11 +4,10 @@ import { config } from "./config.js";
 import { databaseHealth, pool } from "./db.js";
 import { registerFeatureRoutes } from "./http/features.js";
 import { handleLineEvents } from "./line/handler.js";
-import { conversationService } from "./services/conversation.js";
 import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
-import { createHolding, listHoldings, removeHolding, updateHolding, upsertHolding } from "./services/portfolio.js";
+import { createHolding, listActiveHoldings, listHoldings, removeHolding, updateHolding, upsertHolding } from "./services/portfolio.js";
 import { buildDashboard } from "./services/dashboard.js";
 import {
   authorizeUrl, exchangeCodeForUserId, newState, readCookie, signSession, verifySession,
@@ -90,17 +89,29 @@ app.get("/me", async (request, reply) => {
   return reply.type("text/html").send(portfolioPage(holdings));
 });
 
-// 單次 AI 持股分析：限登入者；由 conversation service 載入本人持股後送 AgentCore。
+// 單次 AI 持股分析：限登入者；載入本人持股後直接送 AgentCore（不經意圖路由）。
 app.post("/api/analyze", async (request, reply) => {
   const userId = sessionUser(request);
   if (!userId) return reply.code(401).send({ error: "login_required" });
-  const result = await conversationService.handle({ userId, message: "分析持股" });
-  return {
-    mode: result.mode,
-    intent: result.intent,
-    answer: result.answer,
-    credit: result.credit,
-  };
+  // 只分析持有中的部位；已賣出（quantity=0）不納入健檢 prompt。
+  const holdings = await listActiveHoldings(userId);
+  if (!holdings.length) {
+    return {
+      mode: "local",
+      intent: "analyze_holdings_empty",
+      answer: "目前還沒有持有中的部位可以分析～先新增持股後再回來看看吧。",
+    };
+  }
+  const agent = await invokeAgentCore({
+    userId,
+    message: [
+      "請根據下方由 backend 驗證的 evidence.holdings 分析這位使用者目前的持股。",
+      "先列出目前持股，再說明資料是否完整、集中度，以及下一步值得留意的項目。",
+      "這些持股已屬於本次使用者；不得聲稱缺少身份或持股資料，也不要新增、修改或刪除任何持股。",
+    ].join("\n"),
+    evidence: { holdings },
+  });
+  return { mode: agent.mode, intent: "analyze_holdings", answer: agent.answer };
 });
 
 // 持股儀表板資料（限登入者）：每檔持股的價格走勢、社群情緒走勢與白話解讀。
@@ -109,6 +120,26 @@ app.get("/api/dashboard", async (request, reply) => {
   if (!userId) return reply.code(401).send({ error: "login_required" });
   return buildDashboard(userId);
 });
+
+// 過去持有：使用者補上賣出價與賣出日期（限登入者），供計算已實現損益。
+app.post<{ Params: { code: string }; Body: { soldPrice?: number; soldDate?: string } }>(
+  "/api/portfolio/holdings/:code/sold", async (request, reply) => {
+    const userId = sessionUser(request);
+    if (!userId) return reply.code(401).send({ error: "login_required" });
+    const { soldPrice, soldDate } = request.body ?? {};
+    if (soldPrice !== undefined && (!Number.isFinite(Number(soldPrice)) || Number(soldPrice) < 0)) {
+      return reply.code(400).send({ error: "invalid_sold_price" });
+    }
+    if (soldDate !== undefined && soldDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(soldDate)) {
+      return reply.code(400).send({ error: "invalid_sold_date", expected: "YYYY-MM-DD" });
+    }
+    const result = await updateHolding(userId, request.params.code, {
+      soldPrice: soldPrice === undefined ? undefined : Number(soldPrice),
+      soldDate: soldDate ? soldDate : undefined,
+    });
+    if (!result.updated) return reply.code(404).send({ error: "holding_not_found" });
+    return { ok: true, holdings: result.holdings };
+  });
 
 // 固定意圖、AI assistant 與 credit APIs。
 registerFeatureRoutes(app, sessionUser);
@@ -191,17 +222,17 @@ app.post<{ Body: {
 // 更新（Update）：更新既有標的欄位；全數賣出時傳 quantity=0 + soldPrice。標的不存在回 404。
 app.put<{ Body: {
   lineUserId?: string; stockCode?: string; quantity?: number;
-  averageCost?: number; purchaseDate?: string; soldPrice?: number;
+  averageCost?: number; purchaseDate?: string; soldPrice?: number; soldDate?: string;
 } }>("/api/agent/holdings", async (request, reply) => {
   if (!agentAuthed(request)) return reply.code(401).send({ error: "unauthorized" });
-  const { lineUserId, stockCode, quantity, averageCost, purchaseDate, soldPrice } = request.body;
+  const { lineUserId, stockCode, quantity, averageCost, purchaseDate, soldPrice, soldDate } = request.body;
   if (!lineUserId || !stockCode) {
     return reply.code(400).send({ error: "invalid_request", need: ["lineUserId", "stockCode"] });
   }
   if (quantity !== undefined && quantity < 0) {
     return reply.code(400).send({ error: "invalid_quantity", need: ["quantity>=0"] });
   }
-  const result = await updateHolding(lineUserId, stockCode, { quantity, averageCost, purchaseDate, soldPrice });
+  const result = await updateHolding(lineUserId, stockCode, { quantity, averageCost, purchaseDate, soldPrice, soldDate });
   if (!result.updated) {
     return reply.code(404).send({ error: "holding_not_found", stockCode, hint: "use POST /api/agent/holdings to create" });
   }
@@ -214,7 +245,7 @@ app.post<{ Body: { message?: string; lineUserId?: string } }>(
     const { message, lineUserId } = request.body;
     if (!message) return reply.code(400).send({ error: "missing_message" });
     if (!lineUserId) return reply.code(400).send({ error: "missing_lineUserId" });
-    const holdings = await listHoldings(lineUserId);
+    const holdings = await listActiveHoldings(lineUserId);
     return invokeAgentCore({
       userId: lineUserId,
       message,
