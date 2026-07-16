@@ -106,13 +106,18 @@ def stage_pending_holdings(
             - stock_code: Taiwan stock code, e.g. "2330".
             - quantity: Number of shares (not board lots -- if the user
               said "X 張", multiply by 1000 first). Omit if not
-              applicable.
+              applicable. 0 means a full sell-out (marks the position as
+              a past holding, not deleted).
             - average_cost: Cost per share. Omit if not stated -- never
               guess.
             - purchase_date: ISO date "YYYY-MM-DD". Omit if not stated --
               never guess or default to today.
             - sold_price: Price per share sold at (only for a full
-              sell-out update). Omit otherwise.
+              sell-out update). Omit if the user didn't state it -- they
+              can add it later on the website.
+            - sold_date: ISO date "YYYY-MM-DD" the position was sold on
+              (only for a full sell-out update). Omit if the user didn't
+              state it -- never guess or default to today.
             Maximum 30 items per batch.
         source: "manual" if parsed from the user's typed description,
             "ocr" if parsed from an uploaded image/PDF. Applies to the
@@ -180,7 +185,8 @@ def get_pending_holdings(tool_context: ToolContext) -> dict:
     Returns:
         A dict with "pending": true, "holdings" (the full list of staged
         items, each with action/stock_code/quantity/average_cost/
-        purchase_date/sold_price), "source", and "minutes_remaining" if a
+        purchase_date/sold_price/sold_date), "source", and
+        "minutes_remaining" if a
         valid, non-expired pending batch exists. Returns
         {"pending": false} if there is nothing staged, it expired, or no
         user identity is available -- in that case, tell the user you
