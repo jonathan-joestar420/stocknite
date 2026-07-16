@@ -301,6 +301,48 @@ export async function invokeBedrock(
   return { mode: "bedrock", answer: guardCompliance(raw) };
 }
 
+const HEALTH_CHECK_INSTRUCTIONS = [
+  "你正在為使用者做一次「AI 持股健檢」。下方 JSON 是使用者目前『持有中』的部位，以及 CMoney 提供的歷史、估值、股利、籌碼與社群情緒數據。",
+  "請用繁體中文、清楚分段、重點條列，依以下面向逐一分析（有資料才分析，缺資料就說明不足，不要杜撰數字）：",
+  "1. 整體概況與損益：總市值、總損益、部位分布。",
+  "2. 估值面：本益比、股價淨值比、今年區間位置（買點分位）、距年線乖離，判讀偏貴或偏便宜。",
+  "3. 股利與存股體質：殖利率、連續配息年數、配息率。",
+  "4. 法人與籌碼：外資/法人持股、近20日法人買賣超方向。",
+  "5. 產業集中度與風險：產業分布、單一持股佔比、集中度（HHI）。",
+  "6. 社群情緒與近期趨勢：多空討論、情緒升降溫、股價走勢。",
+  "最後用 2-3 句做總結提醒。",
+  "嚴禁任何買賣建議或指令字眼；只做客觀資料解讀與風險提醒。",
+].join("\n");
+
+/**
+ * 網頁「AI 持股體檢」：單次 Bedrock Claude Sonnet 分析。
+ * 直接把使用者非 0 持股與 CMoney 歷史數據（已整理成 JSON）交給模型，不經 AgentCore。
+ */
+export async function analyzeHoldingsWithBedrock(
+  evidenceJson: string,
+): Promise<AgentResponse> {
+  const command = new InvokeModelCommand({
+    modelId: config.analysisModelId,
+    contentType: "application/json",
+    accept: "application/json",
+    body: JSON.stringify({
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: 1800,
+      system: `${SYSTEM_PROMPT}\n\n${HEALTH_CHECK_INSTRUCTIONS}`,
+      messages: [{
+        role: "user",
+        content: `[持股與歷史數據 JSON]\n${evidenceJson}`,
+      }],
+    }),
+  });
+  const response = await bedrock.send(command);
+  const payload = JSON.parse(new TextDecoder().decode(response.body)) as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+  const raw = payload.content?.map((block) => block.text ?? "").join("").trim() ?? "";
+  return { mode: "bedrock", answer: guardCompliance(raw) };
+}
+
 /** 輕量法遵護欄：確保有免責聲明，並在偵測到指令性字眼時加註提醒。 */
 function guardCompliance(text: string): string {
   const fallback = "抱歉，我這邊暫時無法產生回覆，請稍後再試。";

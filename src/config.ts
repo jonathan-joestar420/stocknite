@@ -11,6 +11,12 @@ function numeric(name: string, fallback: number): number {
 const bedrockModelId =
   optional("BEDROCK_MODEL_ID") ?? "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 
+// 網頁「AI 持股體檢」單次分析用的模型（Bedrock Claude Sonnet）。
+// 註：本帳號尚未開通 claude-sonnet-5，故預設用目前可用最新的 Sonnet 4.6；
+// 之後開通 sonnet-5 可用環境變數 ANALYSIS_MODEL_ID 覆蓋。
+const analysisModelId =
+  optional("ANALYSIS_MODEL_ID") ?? "us.anthropic.claude-sonnet-4-6";
+
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   host: process.env.HOST ?? "127.0.0.1",
@@ -32,6 +38,7 @@ export const config = {
     optional("CREDIT_ENFORCEMENT_ENABLED")?.toLowerCase() === "true",
   awsRegion: optional("AWS_REGION") ?? optional("AWS_DEFAULT_REGION") ?? "us-west-2",
   bedrockModelId,
+  analysisModelId,
   semanticRouterEnabled:
     optional("SEMANTIC_ROUTER_ENABLED")?.toLowerCase() === "true",
   semanticRouterModelId:

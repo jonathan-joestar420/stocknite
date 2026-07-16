@@ -221,3 +221,70 @@ export async function buildDashboard(lineUserId: string) {
 
   return { summary, cards };
 }
+
+/** 把陣列均勻降採樣到最多 n 個點（保留頭尾）。 */
+function downsample<T>(arr: T[], n: number): T[] {
+  if (arr.length <= n) return arr;
+  const step = (arr.length - 1) / (n - 1);
+  const out: T[] = [];
+  for (let i = 0; i < n; i++) out.push(arr[Math.round(i * step)]!);
+  return out;
+}
+
+/**
+ * 為網頁「AI 持股體檢」整理單次分析用的精簡 payload：
+ * 目前持有中的部位 + CMoney 的估值/股利/籌碼/報酬，以及降採樣後的價格走勢與情緒彙總。
+ */
+export async function buildHoldingsHealthCheckPayload(lineUserId: string) {
+  const { summary, cards } = await buildDashboard(lineUserId);
+  const holdings = cards.map((c) => {
+    const prices = c.priceHistory.map((p) => p.c).filter((v): v is number => v !== null);
+    const priceTrend = prices.length
+      ? {
+        first: prices[0],
+        last: prices[prices.length - 1],
+        min: Math.min(...prices),
+        max: Math.max(...prices),
+        points: downsample(c.priceHistory.map((p) => ({ d: p.d, c: p.c })), 12),
+      }
+      : null;
+    const recentSent = c.sentimentHistory.slice(-15);
+    const bull = recentSent.reduce((s, x) => s + x.bull, 0);
+    const bear = recentSent.reduce((s, x) => s + x.bear, 0);
+    return {
+      stock_code: c.stock_code,
+      stock_name: c.stock_name,
+      market: c.market,
+      industry: c.industry,
+      quantity: c.quantity,
+      average_cost: c.average_cost,
+      close_price: c.close_price,
+      market_value: c.market_value,
+      weight_pct: c.weight === null ? null : Number((c.weight * 100).toFixed(2)),
+      purchase_date: c.purchase_date,
+      pnl_pct: c.pnlPct === null ? null : Number(c.pnlPct.toFixed(2)),
+      valuation: {
+        pe_ratio_ttm: c.pe, price_to_book: c.pb,
+        buy_point_percentile_pct: c.buyPointPct === null ? null : Number(c.buyPointPct.toFixed(1)),
+        deviation_year_ma_pct: c.deviationYearMa,
+        year_high: c.yearHigh, year_low: c.yearLow, all_time_high: c.allTimeHigh,
+      },
+      dividend: {
+        yield_pct: c.dividendYield, consecutive_years: c.consecutiveDividendYears,
+        latest_cash: c.latestCashDividend, payout_ratio_pct: c.payoutRatio,
+        ex_dividend_date: c.exDividendDate,
+      },
+      returns: {
+        quarterly_pct: c.quarterlyReturn, annual_pct: c.annualReturn,
+        relative_annual_pct: c.relativeAnnualReturn, ytd_pct: c.ytdReturn,
+      },
+      chips: {
+        foreign_holding_pct: c.foreignHolding, institutional_holding_pct: c.instHolding,
+        institutional_net_buy_sell_20d: c.instNet20d,
+      },
+      price_trend_90d: priceTrend,
+      sentiment_recent: { bullish_posts: bull, bearish_posts: bear },
+    };
+  });
+  return { count: cards.length, portfolio: summary, holdings };
+}

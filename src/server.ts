@@ -1,5 +1,5 @@
 import Fastify, { type FastifyRequest } from "fastify";
-import { invokeAgentCore } from "./agent/adapter.js";
+import { analyzeHoldingsWithBedrock, invokeAgentCore } from "./agent/adapter.js";
 import { config } from "./config.js";
 import { databaseHealth, pool } from "./db.js";
 import { registerFeatureRoutes } from "./http/features.js";
@@ -8,7 +8,7 @@ import { lineMenu } from "./line/menu.js";
 import { verifyLineSignature } from "./line/signature.js";
 import { getMarketSentiment, getStockDailySnapshot, getStockHistory, getStockSummary } from "./services/market.js";
 import { createHolding, listActiveHoldings, listHoldings, removeHolding, updateHolding, upsertHolding } from "./services/portfolio.js";
-import { buildDashboard } from "./services/dashboard.js";
+import { buildDashboard, buildHoldingsHealthCheckPayload } from "./services/dashboard.js";
 import {
   authorizeUrl, exchangeCodeForUserId, newState, readCookie, signSession, verifySession,
 } from "./line/login.js";
@@ -89,29 +89,21 @@ app.get("/me", async (request, reply) => {
   return reply.type("text/html").send(portfolioPage(holdings));
 });
 
-// 單次 AI 持股分析：限登入者；載入本人持股後直接送 AgentCore（不經意圖路由）。
+// 單次 AI 持股體檢：限登入者。把持有中部位 + CMoney 歷史數據交給 Bedrock Claude Sonnet 單次分析。
 app.post("/api/analyze", async (request, reply) => {
   const userId = sessionUser(request);
   if (!userId) return reply.code(401).send({ error: "login_required" });
-  // 只分析持有中的部位；已賣出（quantity=0）不納入健檢 prompt。
-  const holdings = await listActiveHoldings(userId);
-  if (!holdings.length) {
+  // 只分析持有中的部位；已賣出（quantity=0）不納入體檢。
+  const payload = await buildHoldingsHealthCheckPayload(userId);
+  if (!payload.count) {
     return {
       mode: "local",
       intent: "analyze_holdings_empty",
       answer: "目前還沒有持有中的部位可以分析～先新增持股後再回來看看吧。",
     };
   }
-  const agent = await invokeAgentCore({
-    userId,
-    message: [
-      "請根據下方由 backend 驗證的 evidence.holdings 分析這位使用者目前的持股。",
-      "先列出目前持股，再說明資料是否完整、集中度，以及下一步值得留意的項目。",
-      "這些持股已屬於本次使用者；不得聲稱缺少身份或持股資料，也不要新增、修改或刪除任何持股。",
-    ].join("\n"),
-    evidence: { holdings },
-  });
-  return { mode: agent.mode, intent: "analyze_holdings", answer: agent.answer };
+  const result = await analyzeHoldingsWithBedrock(JSON.stringify(payload));
+  return { mode: result.mode, intent: "analyze_holdings", answer: result.answer };
 });
 
 // 持股儀表板資料（限登入者）：每檔持股的價格走勢、社群情緒走勢與白話解讀。
