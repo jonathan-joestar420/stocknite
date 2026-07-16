@@ -111,6 +111,15 @@ def get_holdings(tool_context: ToolContext) -> dict:
         with stock_code, stock_name, quantity, average_cost,
         purchase_date, close_price, market_value, and weight (portfolio
         share as a decimal). Empty list if the user has no holdings yet.
+
+        This list includes PAST holdings too (quantity == 0, i.e. fully
+        sold out) alongside current ones (quantity > 0) -- selling out
+        marks a position as "past holding" rather than deleting it. Past
+        holdings also carry sold_price/sold_quantity/sold_date (any of
+        which may be null if the user never filled them in -- they can
+        complete this later on the website). Check quantity to tell
+        current vs. past holdings apart when summarizing for the user.
+
         Returns {"error": ...} on request failure or if no user identity
         is available in this session.
     """
@@ -189,6 +198,7 @@ def update_holding(
     average_cost: float | None = None,
     purchase_date: str | None = None,
     sold_price: float | None = None,
+    sold_date: str | None = None,
 ) -> dict:
     """Update an EXISTING stock position for the current user. Only the
     fields you pass are changed; omitted fields keep their current value.
@@ -199,22 +209,32 @@ def update_holding(
     The user's identity is taken automatically from the current
     conversation -- you do not provide it.
 
-    To record a full sell-out of a position, pass quantity=0 and
-    sold_price (the price it was sold at, used to compute realized
-    gain/loss). There is no separate delete endpoint -- selling out is
-    modeled as updating quantity to 0.
+    To record a full sell-out, pass quantity=0. This marks the position
+    as a PAST holding (kept in the database, hidden from the current
+    portfolio/trend views) rather than deleting it -- there is no
+    separate delete endpoint. The backend automatically preserves the
+    pre-sale share count as sold_quantity; you never need to pass that.
+    sold_price and sold_date are both optional even for a full sell-out
+    -- only pass them if the user actually stated them, never guess. The
+    user can fill these in later on the website to see realized
+    gain/loss; until then the sale is recorded with quantity=0 and no
+    realized P&L shown.
 
     Args:
         stock_code: Taiwan stock code of the EXISTING position to update.
-        quantity: New share count. Pass 0 to record a full sell-out. If
-            the user says "X 張", multiply by 1000 first. Omit if not
-            changing.
+        quantity: New share count. Pass 0 to record a full sell-out
+            (marks as past holding, not deleted). If the user says "X
+            張", multiply by 1000 first. Omit if not changing.
         average_cost: New cost per share. Omit if not changing.
         purchase_date: New ISO date string "YYYY-MM-DD". Omit if not
             changing -- do not guess a date.
         sold_price: Price per share the position was sold at. Only
-            relevant when quantity=0 (full sell-out), used by the backend
-            to compute realized gain/loss.
+            relevant when quantity=0 (full sell-out). Omit if the user
+            didn't state it -- never guess; they can add it later on the
+            website.
+        sold_date: ISO date string "YYYY-MM-DD" the position was sold on.
+            Only relevant when quantity=0. Omit if the user didn't state
+            it -- never guess or default to today.
 
     Returns:
         A dict with "updated": true and the user's full updated holdings
@@ -235,5 +255,7 @@ def update_holding(
         payload["purchaseDate"] = purchase_date
     if sold_price is not None:
         payload["soldPrice"] = sold_price
+    if sold_date is not None:
+        payload["soldDate"] = sold_date
 
     return _request("PUT", "/api/agent/holdings", json=payload)
