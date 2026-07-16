@@ -3,21 +3,154 @@ import { config } from "./config.js";
 export function landingPage(): string {
   return `<!doctype html><html lang="zh-Hant"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>股奈 StockNite｜存好股，睡好覺</title><style>
-:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#07111f;color:#f4f7fa}
-body{margin:0}.wrap{max-width:960px;margin:auto;padding:72px 24px}.hero{min-height:60vh;display:grid;place-content:center;text-align:center}
-h1{font-size:clamp(3rem,9vw,6rem);margin:0;color:#7ee0b5}h2{font-size:clamp(1.6rem,4vw,3rem);margin:.4em}
-p{color:#a8b3c2;line-height:1.8}.button{display:inline-block;background:#7ee0b5;color:#07111f;padding:14px 24px;border-radius:999px;text-decoration:none;font-weight:700}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.card{background:#101d2e;padding:24px;border-radius:18px}
-small{color:#a8b3c2}</style></head><body><main class="wrap">
-<section class="hero"><small>LINE 投資陪伴助手</small><h1>股奈 StockNite</h1><h2>存好股，睡好覺。</h2>
-<p>整理市場情緒、歷史走勢與你的持股風險。<br>不預測明牌，只幫你看懂資料。</p>
-<a class="button" href="${config.lineAddFriendUrl}">用 LINE 開始使用</a>
-<a class="button" style="background:#00c300;color:#fff;margin-left:12px" href="/auth/line/login">LINE 登入看我的持股</a></section>
-<section class="grid"><article class="card"><h3>查股票</h3><p>輸入股票代號，快速查看價格、法人與歷史表現。</p></article>
-<article class="card"><h3>持股健檢</h3><p>檢視單股與產業集中度，找出重疊風險。</p></article>
-<article class="card"><h3>早安摘要</h3><p>每天早上七點，只整理與你持股相關的重點。</p></article></section>
-</main></body></html>`;
+<title>股奈 StockNite｜AI 投資陪伴，存好股睡好覺</title>
+<meta name="description" content="股奈 StockNite 是 CMoney × AWS Hackathon 作品：用 LINE 與 AI 幫你記錄持股、體檢風險、看懂市場資料。只給洞察與提醒，不預測明牌。">
+<style>
+:root{color-scheme:dark;--bg:#07111f;--panel:#101d2e;--panel2:#0a1626;--line:#1c2b3f;--txt:#f4f7fa;--mut:#a8b3c2;--acc:#7ee0b5;--line-green:#00c300}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;background:var(--bg);color:var(--txt);line-height:1.7}
+a{color:var(--acc)}
+.wrap{max-width:1040px;margin:auto;padding:0 24px}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:20px 0}
+.nav .brand{font-weight:800;color:var(--acc);font-size:20px;letter-spacing:.5px}
+.nav a.login{background:var(--line-green);color:#fff;padding:9px 16px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px}
+.btn{display:inline-block;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:999px}
+.btn.primary{background:var(--acc);color:#07111f}
+.btn.line{background:var(--line-green);color:#fff}
+.btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+.hero{text-align:center;padding:56px 0 40px}
+.badge{display:inline-block;font-size:13px;color:var(--acc);border:1px solid #274a3c;background:#0c1f19;border-radius:999px;padding:5px 14px;margin-bottom:20px}
+.hero h1{font-size:clamp(2.8rem,8vw,5rem);margin:.1em 0;color:var(--acc);letter-spacing:1px}
+.hero .tag{font-size:clamp(1.4rem,4vw,2.2rem);margin:.2em 0;font-weight:700}
+.hero p{color:var(--mut);max-width:620px;margin:16px auto 26px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.meta{color:#6f7f92;font-size:13px;margin-top:22px}
+.meta b{color:var(--mut);font-weight:600}
+section.block{padding:40px 0;border-top:1px solid var(--line)}
+h2.sec{font-size:26px;color:var(--acc);margin:0 0 6px}
+.sub{color:var(--mut);margin:0 0 24px;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:var(--panel);padding:22px;border-radius:16px;border:1px solid var(--line)}
+.card .ico{font-size:22px}
+.card h3{margin:8px 0 6px;font-size:17px;color:var(--txt)}
+.card p{margin:0;color:var(--mut);font-size:14px}
+.flow{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;margin:8px 0 22px}
+.flow .node{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.flow .node b{display:block;color:var(--acc);font-size:14px;margin-bottom:4px}
+.flow .node span{color:var(--mut);font-size:12.5px}
+.flow .arrow{align-self:center;color:#4a5f78;font-size:20px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.chip{background:var(--panel2);border:1px solid var(--line);color:#b7c3d2;font-size:12.5px;border-radius:999px;padding:5px 12px}
+.data{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.data .d{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.data .d b{color:var(--txt);font-size:14px}
+.data .d span{display:block;color:var(--mut);font-size:12.5px;margin-top:2px}
+.vision{background:linear-gradient(180deg,#0c1a2b,#0a1626);border:1px dashed #2c4257;border-radius:16px;padding:22px}
+.vision ul{margin:8px 0 0;padding-left:1.1em;color:var(--mut)}
+.vision li{margin:6px 0}
+.vtag{display:inline-block;font-size:12px;color:#ffcf6b;border:1px solid #5a4a1f;background:#1c160a;border-radius:999px;padding:3px 10px;margin-left:8px}
+.finale{text-align:center;padding:48px 0}
+.finale h2{border:0}
+.note{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--mut);font-size:13.5px;margin-top:22px}
+footer{border-top:1px solid var(--line);padding:26px 0 48px;color:#6f7f92;font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+</style></head><body>
+<div class="wrap">
+  <nav class="nav">
+    <div class="brand">🌙 股奈 StockNite</div>
+    <a class="login" href="/auth/line/login">LINE 登入 Demo</a>
+  </nav>
+
+  <header class="hero">
+    <span class="badge">CMoney × AWS Hackathon 作品｜LINE 投資陪伴 × AI</span>
+    <h1>股奈 StockNite</h1>
+    <div class="tag">存好股，睡好覺。</div>
+    <p>用 AI 幫你記錄持股、體檢風險、看懂市場資料。<br>只給客觀洞察與提醒，不預測明牌、不給買賣建議。</p>
+    <div class="cta">
+      <a class="btn line" href="${config.lineAddFriendUrl}">用 LINE 加入好友</a>
+      <a class="btn primary" href="/auth/line/login">登入看我的持股（Demo）</a>
+    </div>
+    <div class="meta"><b>示範資料截至 2025-12-31</b>　·　台股 300 檔示範標的　·　分析僅供參考，不構成投資建議</div>
+  </header>
+
+  <section class="block">
+    <h2 class="sec">產品亮點</h2>
+    <p class="sub">從 LINE 對話到網站儀表板，一條龍幫你把持股與市場資料看清楚。</p>
+    <div class="grid">
+      <article class="card"><div class="ico">💬</div><h3>LINE 對話即記帳</h3><p>用自然語言說「我買了台積電 1 張、成本 900」，或直接上傳持股截圖，AI 解析後先跟你確認再存檔。</p></article>
+      <article class="card"><div class="ico">📊</div><h3>持股損益一目了然</h3><p>登入網站看每檔的成本、市值、損益與佔比；賣出後自動轉為「過去持有」並計算已實現損益。</p></article>
+      <article class="card"><div class="ico">🩺</div><h3>AI 持股體檢</h3><p>一鍵用 Amazon Bedrock 上的 Claude，針對你的持股＋CMoney 歷史數據做整體健檢（估值、股利、籌碼、集中度、情緒）。</p></article>
+      <article class="card"><div class="ico">📈</div><h3>洞察儀表板</h3><p>每檔的股價／成本走勢、社群多空情緒、估值與法人籌碼；再加上組合層級的產業分布與集中度指標。</p></article>
+      <article class="card"><div class="ico">🤖</div><h3>隨身 AI 助手</h3><p>網站右下角隨時開聊，問你自己的持股或市場近況，回覆依你的實際庫存量身作答。</p></article>
+      <article class="card"><div class="ico">🛡️</div><h3>合規優先</h3><p>只提供客觀資料解讀與風險提醒，不出現買賣指令，每則回覆都附上免責聲明。</p></article>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">運作方式與架構</h2>
+    <p class="sub">兩個入口（LINE 與網站）共用同一套後端與 AI，身份以 LINE 帳號貫穿。</p>
+    <div class="flow">
+      <div class="node"><b>你</b><span>LINE 官方帳號 / 網站（LINE 登入）</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>股奈後端</b><span>Node · Fastify · TypeScript<br>AWS EC2 + Caddy（HTTPS）</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>AI 大腦</b><span>Amazon Bedrock AgentCore 多代理<br>＋ Claude（對話／體檢）</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>資料</b><span>PostgreSQL<br>CMoney 市場資料 + 你的持股</span></div>
+    </div>
+    <p class="sub" style="margin-bottom:8px">技術與服務</p>
+    <div class="chips">
+      <span class="chip">LINE Messaging / Login API</span>
+      <span class="chip">AWS EC2</span>
+      <span class="chip">Caddy · Let's Encrypt</span>
+      <span class="chip">Amazon Bedrock AgentCore</span>
+      <span class="chip">Claude Sonnet / Haiku</span>
+      <span class="chip">PostgreSQL</span>
+      <span class="chip">Chart.js</span>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">資料來源：CMoney 資料集</h2>
+    <p class="sub">以 CMoney 提供的台股 300 檔示範資料為基礎（時間基準 2025-12-31）。</p>
+    <div class="data">
+      <div class="d"><b>行情與估值</b><span>收盤、本益比、股價淨值比、周轉率</span></div>
+      <div class="d"><b>法人買賣超</b><span>外資／投信／自營商、持股比例</span></div>
+      <div class="d"><b>報酬與動能</b><span>季／年報酬、距年高低、距年線乖離</span></div>
+      <div class="d"><b>股利與配息</b><span>殖利率、連續配息年數、配息率</span></div>
+      <div class="d"><b>產業分類</b><span>產業別對應與組合分布</span></div>
+      <div class="d"><b>社群情緒（獨家）</b><span>同學會多空討論則數與趨勢</span></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="sec">產品願景 <span class="vtag">尚未上線</span></h2>
+    <p class="sub">目前 demo 尚未包含以下功能，是我們接下來想做的方向。</p>
+    <div class="vision">
+      <ul>
+        <li><b>每日晨報推播</b>：每天早上 07:00，只推跟你持股相關的重點整理。</li>
+        <li><b>主動提醒</b>：當你的持股出現「社群情緒 × 法人動向」的明顯變化時主動通知。</li>
+        <li><b>更多標的與更即時的行情</b>：從 300 檔示範資料擴大到更完整、更即時的市場涵蓋。</li>
+        <li><b>存股目標與個人化通知設定</b>：設定目標、追蹤進度、自訂提醒時間。</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="finale">
+    <h2 class="sec">準備好了嗎？</h2>
+    <p class="sub">用 LINE 登入，立刻看你的持股體檢與洞察儀表板。</p>
+    <div class="cta">
+      <a class="btn primary" href="/auth/line/login">登入開始 Demo</a>
+      <a class="btn ghost" href="${config.lineAddFriendUrl}">先加 LINE 好友</a>
+    </div>
+    <div class="note">合規說明：股奈只在你確認後保存持股，並可要求刪除。所有分析僅為客觀資料解讀與風險提醒，<b>不構成投資建議</b>。示範資料時間基準為 2025-12-31。</div>
+  </div>
+
+  <footer>
+    <span>© 股奈 StockNite · CMoney × AWS Hackathon</span>
+    <span><a href="/privacy">隱私權說明</a></span>
+  </footer>
+</div>
+</body></html>`;
 }
 
 type HoldingRow = {
