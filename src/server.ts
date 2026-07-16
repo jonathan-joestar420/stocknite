@@ -113,26 +113,6 @@ app.get("/api/dashboard", async (request, reply) => {
   return buildDashboard(userId);
 });
 
-// 過去持有：使用者補上賣出價與賣出日期（限登入者），供計算已實現損益。
-app.post<{ Params: { code: string }; Body: { soldPrice?: number; soldDate?: string } }>(
-  "/api/portfolio/holdings/:code/sold", async (request, reply) => {
-    const userId = sessionUser(request);
-    if (!userId) return reply.code(401).send({ error: "login_required" });
-    const { soldPrice, soldDate } = request.body ?? {};
-    if (soldPrice !== undefined && (!Number.isFinite(Number(soldPrice)) || Number(soldPrice) < 0)) {
-      return reply.code(400).send({ error: "invalid_sold_price" });
-    }
-    if (soldDate !== undefined && soldDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(soldDate)) {
-      return reply.code(400).send({ error: "invalid_sold_date", expected: "YYYY-MM-DD" });
-    }
-    const result = await updateHolding(userId, request.params.code, {
-      soldPrice: soldPrice === undefined ? undefined : Number(soldPrice),
-      soldDate: soldDate ? soldDate : undefined,
-    });
-    if (!result.updated) return reply.code(404).send({ error: "holding_not_found" });
-    return { ok: true, holdings: result.holdings };
-  });
-
 // 固定意圖、AI assistant 與 credit APIs。
 registerFeatureRoutes(app, sessionUser);
 

@@ -162,52 +162,6 @@ type HoldingRow = {
   sold_date?: string | null;
 };
 
-/** 已實現損益 =（賣出價 − 成本）× 賣出股數；資料不足回 null。 */
-function realizedPnl(h: HoldingRow): { amount: number; pct: number } | null {
-  const cost = Number(h.average_cost);
-  const soldPrice = Number(h.sold_price);
-  const soldQty = Number(h.sold_quantity);
-  if (!Number.isFinite(cost) || cost <= 0 || !Number.isFinite(soldPrice) ||
-      !Number.isFinite(soldQty) || soldQty <= 0) return null;
-  const basis = cost * soldQty;
-  const amount = (soldPrice - cost) * soldQty;
-  return { amount, pct: basis ? (amount / basis) * 100 : 0 };
-}
-
-/** 產生「過去持有」區塊 HTML（已賣出的部位）。 */
-function pastHoldingsSection(sold: HoldingRow[]): string {
-  if (!sold.length) return "";
-  const rows = sold.map((h) => {
-    const pl = realizedPnl(h);
-    const plCell = pl
-      ? `<td class="num ${pl.amount >= 0 ? "up" : "down"}">${pl.amount >= 0 ? "+" : ""}${fmt(pl.amount)}<br><small>${pl.amount >= 0 ? "+" : ""}${pl.pct.toFixed(1)}%</small></td>`
-      : `<td class="num"><small>待輸入賣價</small></td>`;
-    const soldPriceVal = h.sold_price != null && h.sold_price !== "" ? fmt(h.sold_price, 2) : "—";
-    const soldDateVal = h.sold_date ? ymd(h.sold_date) : "—";
-    const code = String(h.stock_code);
-    return `<tr>
-      <td>${h.stock_name ?? ""}<small> ${code}</small></td>
-      <td class="num">${fmt(h.sold_quantity)}</td>
-      <td class="num">${fmt(h.average_cost, 2)}</td>
-      <td class="num">${soldPriceVal}</td>
-      <td class="num">${soldDateVal}</td>
-      ${plCell}
-      <td class="num">
-        <div class="soldform">
-          <input id="sp_${code}" type="number" step="0.01" min="0" placeholder="賣價" value="${h.sold_price != null && h.sold_price !== "" ? Number(h.sold_price) : ""}"/>
-          <input id="sd_${code}" type="date" value="${h.sold_date ? ymd(h.sold_date) : ""}"/>
-          <button class="btn small" onclick="saveSold('${code}')">儲存</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
-  return `<h2 style="margin-top:28px;color:#8894a3">過去持有（已賣出）</h2>
-<small>已賣出的部位不再顯示於上方持股與走勢分析。補上賣出價與賣出日即可計算已實現損益。</small>
-<table>
-<tr><th>股票</th><th class="num">賣出股數</th><th class="num">成本</th><th class="num">賣出價</th><th class="num">賣出日</th><th class="num">已實現損益</th><th class="num">補登賣出</th></tr>
-${rows}</table>`;
-}
-
 function fmt(v: unknown, digits = 0): string {
   const n = Number(v);
   if (v === null || v === undefined || Number.isNaN(n)) return "—";
@@ -237,9 +191,8 @@ function pnlCell(pl: { amount: number; pct: number } | null): string {
 }
 
 export function portfolioPage(holdings: HoldingRow[], displayName?: string): string {
-  // 只把「持有中」（quantity>0）放到主頁；已賣出（quantity=0）進「過去持有」。
+  // 只顯示「持有中」（quantity>0）的部位；已賣出（quantity=0）不在網站顯示。
   const active = holdings.filter((h) => (Number(h.quantity) || 0) > 0);
-  const sold = holdings.filter((h) => (Number(h.quantity) || 0) <= 0);
   const total = active.reduce((s, h) => s + (Number(h.market_value) || 0), 0);
   const totalBasis = active.reduce(
     (s, h) => s + (pnlOf(h) ? Number(h.average_cost) * Number(h.quantity) : 0), 0);
@@ -271,10 +224,6 @@ a{color:#7ee0b5}.top{display:flex;justify-content:space-between;align-items:cent
 .card{background:#101d2e;padding:20px;border-radius:14px;margin-top:24px}
 .card h3{margin:0 0 10px;color:#7ee0b5}
 .btn{background:#7ee0b5;color:#07111f;border:0;padding:10px 18px;border-radius:999px;font-weight:700;cursor:pointer}
-.btn.small{padding:6px 12px;font-size:12px}
-.soldform{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
-.soldform input{width:92px;padding:6px 8px;border-radius:8px;border:1px solid #24374f;background:#0a1626;color:#f4f7fa;font-size:12px}
-.soldform input[type=date]{width:130px}
 .out{line-height:1.7;margin-top:12px;color:#dbe4ee}
 .out h1,.out h2,.out h3,.out h4,.msg h1,.msg h2,.msg h3,.msg h4{font-size:1.02em;margin:.6em 0 .3em;color:#7ee0b5}
 .out ul,.out ol,.msg ul,.msg ol{padding-left:1.2em;margin:.3em 0}
@@ -336,8 +285,6 @@ ${rows}</table>
     : ""
 }</p>` : empty}
 
-${pastHoldingsSection(sold)}
-
 <section class="card">
   <h3>AI 持股體檢</h3>
   <small>用 AI 對你目前的整體持股做一次分析（六大面向）。</small>
@@ -367,18 +314,6 @@ ${pastHoldingsSection(sold)}
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script>
 function mdSafe(t){ try{ return window.marked ? marked.parse(String(t)) : String(t); }catch(e){ return String(t); } }
-async function saveSold(code){
-  var sp=document.getElementById('sp_'+code), sd=document.getElementById('sd_'+code);
-  var body={};
-  if(sp && sp.value!=='') body.soldPrice=Number(sp.value);
-  if(sd && sd.value!=='') body.soldDate=sd.value;
-  if(body.soldPrice===undefined && body.soldDate===undefined){ alert('請至少輸入賣出價或賣出日'); return; }
-  try{
-    var r=await fetch('/api/portfolio/holdings/'+encodeURIComponent(code)+'/sold',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-    if(!r.ok){ var e=await r.json().catch(function(){return {};}); alert('儲存失敗：'+(e.error||r.status)); return; }
-    location.reload();
-  }catch(e){ alert('連線失敗，請稍後再試。'); }
-}
 async function runAnalyze(){
   var btn=document.getElementById('analyzeBtn'), out=document.getElementById('analyzeOut');
   btn.disabled=true; out.innerHTML='<span class="typing"><i></i><i></i><i></i></span>';
