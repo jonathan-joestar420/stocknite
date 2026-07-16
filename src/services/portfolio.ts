@@ -76,14 +76,15 @@ export async function updateHolding(
   const rows = await query<{ stock_code: string }>(`
     UPDATE app_data.portfolio_holdings h
     SET sold_quantity = CASE
-          WHEN $3 IS NOT NULL AND $3 = 0 AND h.sold_quantity IS NULL AND h.quantity > 0
+          WHEN $3::numeric IS NOT NULL AND $3::numeric = 0
+            AND h.sold_quantity IS NULL AND h.quantity > 0
             THEN h.quantity
           ELSE h.sold_quantity END,
-        quantity = COALESCE($3, h.quantity),
-        average_cost = COALESCE($4, h.average_cost),
-        purchase_date = COALESCE($5, h.purchase_date),
-        sold_price = COALESCE($6, h.sold_price),
-        sold_date = COALESCE($7, h.sold_date),
+        quantity = COALESCE($3::numeric, h.quantity),
+        average_cost = COALESCE($4::numeric, h.average_cost),
+        purchase_date = COALESCE($5::date, h.purchase_date),
+        sold_price = COALESCE($6::numeric, h.sold_price),
+        sold_date = COALESCE($7::date, h.sold_date),
         updated_at = now()
     FROM app_data.users u
     WHERE h.user_id = u.id AND u.line_user_id = $1 AND h.stock_code = $2
