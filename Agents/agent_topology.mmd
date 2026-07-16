@@ -1,0 +1,36 @@
+flowchart TD
+    User[LINE Bot / Web User] -->|prompt + line_user_id| Main["main.py<br/>AgentCore Runtime entrypoint"]
+    Main --> Root
+
+    Root["root_agent (stocknite_agent)<br/>Sonnet - persona/router"]
+
+    Root -->|"transfer (sub_agent)"| SA["stock_analysis_agent<br/>Sonnet - demo-data analysis"]
+    Root -->|"transfer (sub_agent)"| Pull["pull_stock_agent<br/>Sonnet - READ-ONLY holdings"]
+    Root -->|"transfer (sub_agent)"| Arch["archiving_stock_agent<br/>Sonnet - WRITE holdings"]
+
+    SA -.->|AgentTool call-and-relay| Butterfly["butterfly_effect_agent<br/>Haiku - event to stock relevance"]
+
+    Pull -->|"transfer (sub_agent)"| SAH["stock_analysis_agent_via_holdings<br/>Sonnet - twin of stock_analysis_agent"]
+
+    Arch -.->|AgentTool call-and-relay| Pull
+
+    Root --- RootTools["get_stock_snapshot, get_momentum_indicators,<br/>get_dividend_ranking, ux-translation skill"]
+    SA --- SATools["+ get_forum_sentiment, get_institutional_trend,<br/>get_historical_return, compute_portfolio_weights,<br/>get_portfolio_metrics, get_risk_contribution,<br/>get_correlation, optimize_portfolio_sharpe"]
+    SAH --- SATools
+    Pull --- PullTools["get_holdings"]
+    Arch --- ArchTools["stage/get/discard_pending_holdings,<br/>add_holding, update_holding"]
+    Butterfly --- ButterflyTools["search_news, latest-news skill"]
+
+    PullTools -->|HTTP| HoldingsAPI[("Holdings API<br/>Postgres on EC2")]
+    ArchTools -->|HTTP| HoldingsAPI
+    ArchTools -->|read/write| DynamoDB[("DynamoDB<br/>stocknite-pending-holdings")]
+    RootTools -->|read| DemoData[("CMoney 300-stock<br/>demo dataset, 2025")]
+    SATools -->|read| DemoData
+    ButterflyTools -->|read| NewsJSON[("Mock news JSON<br/>Skills/latest-news")]
+
+    Root -.model.-> Bedrock[("Amazon Bedrock<br/>Claude Sonnet 4.5 / Haiku 4.5<br/>via LiteLLM")]
+    SA -.model.-> Bedrock
+    Pull -.model.-> Bedrock
+    Arch -.model.-> Bedrock
+    SAH -.model.-> Bedrock
+    Butterfly -.model.-> Bedrock

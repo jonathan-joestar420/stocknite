@@ -1,0 +1,13 @@
+bedrock-agentcore==1.18.0
+google-adk==2.4.0
+litellm==1.91.3
+boto3==1.43.47
+pandas==3.0.3
+numpy==2.5.1
+scipy==1.18.0
+requests==2.34.2
+# boto3 above is also used directly by Tools/data_loader.py (S3 fallback
+# for the CMoney datasets) and Tools/pending_holdings_tools.py (DynamoDB
+# pending-holdings staging table).
+# requests is used by Tools/holdings_tools.py to call the colleague's
+# holdings HTTP API (stocknite.zzeric.com).
