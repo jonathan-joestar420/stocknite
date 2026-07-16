@@ -1,0 +1,20 @@
+# Secrets -- never commit
+.env
+.env.*
+!.env.example
+
+# AgentCore deployment state -- environment-specific, regenerated via
+# `agentcore configure`/`agentcore deploy` (see AWS AgentCore Deployment.md)
+.bedrock_agentcore.yaml
+.bedrock_agentcore/
+
+# Local ADK session state (adk web / adk run)
+.adk/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store

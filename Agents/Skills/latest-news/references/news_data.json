@@ -1,0 +1,70 @@
+{
+  "_comment": "Mock news dataset for the latest-news skill. Keyed by keyword (substring match against the user's/agent's search query). Intended to be periodically updated by a dedicated news-updater agent (not yet built) -- this file is the editable source of truth, not Tools/news_tools.py.",
+  "挪威": {
+    "query_matched": "挪威 世界盃 足球",
+    "has_direct_financial_link": false,
+    "summary": "挪威國家足球隊在近期國際賽事中落敗，純屬體育新聞，與半導體產業或台積電的晶圓代工業務無任何直接財務關聯。",
+    "weak_indirect_link": "挪威政府退休基金全球基金 (GPFG) 是全球最大的主權財富基金之一，長期持有台積電 ADR 股份，是台積電前十大機構股東之一。但球隊輸球與基金的投資決策之間沒有已知的因果關係。",
+    "sources": [
+      {
+        "title": "(MOCK) Norway national football team results",
+        "url": "https://example.com/mock-norway-football",
+        "published": "2025-12-30"
+      },
+      {
+        "title": "(MOCK) Norges Bank Investment Management - TSMC holding",
+        "url": "https://example.com/mock-gpfg-tsmc",
+        "published": "2025-11-15"
+      }
+    ]
+  },
+  "美東": {
+    "query_matched": "美東 碼頭 罷工 長榮",
+    "has_direct_financial_link": true,
+    "summary": "美東碼頭工會與港口運營方的勞資談判再度陷入僵局，工會警告可能發動無限期罷工。多個東岸主要港口已出現貨物積壓、船舶排隊等候卸貨的情況。",
+    "causal_chain": [
+      "美東碼頭工會與資方談判破裂，罷工風險升高",
+      "港口作業停滯，船隻被迫在港外排隊等候",
+      "市場上可用的空班輪運力減少（運力緊縮）",
+      "貨櫃即期運價（SCFI）短期內快速上漲",
+      "航運公司（如長榮）短期營收與獲利可能受益"
+    ],
+    "sources": [
+      {
+        "title": "(MOCK) US East Coast port labor talks stall",
+        "url": "https://example.com/mock-east-coast-strike",
+        "published": "2025-12-31"
+      },
+      {
+        "title": "(MOCK) SCFI container freight rates surge",
+        "url": "https://example.com/mock-scfi-surge",
+        "published": "2025-12-31"
+      }
+    ]
+  },
+  "罷工": {
+    "_comment": "alias, same event as 美東",
+    "query_matched": "美東 碼頭 罷工 長榮",
+    "has_direct_financial_link": true,
+    "summary": "美東碼頭工會與港口運營方的勞資談判再度陷入僵局，工會警告可能發動無限期罷工。多個東岸主要港口已出現貨物積壓、船舶排隊等候卸貨的情況。",
+    "causal_chain": [
+      "美東碼頭工會與資方談判破裂，罷工風險升高",
+      "港口作業停滯，船隻被迫在港外排隊等候",
+      "市場上可用的空班輪運力減少（運力緊縮）",
+      "貨櫃即期運價（SCFI）短期內快速上漲",
+      "航運公司（如長榮）短期營收與獲利可能受益"
+    ],
+    "sources": [
+      {
+        "title": "(MOCK) US East Coast port labor talks stall",
+        "url": "https://example.com/mock-east-coast-strike",
+        "published": "2025-12-31"
+      },
+      {
+        "title": "(MOCK) SCFI container freight rates surge",
+        "url": "https://example.com/mock-scfi-surge",
+        "published": "2025-12-31"
+      }
+    ]
+  }
+}
